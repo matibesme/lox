@@ -6,12 +6,14 @@ import sys
 
 from .errors import ErrorReporter
 from .scanner import Scanner
+from .parser import Parser
 
 
 def _run(source: str, reporter: ErrorReporter) -> None:
     tokens = Scanner(source, reporter).scan_tokens()
-    for token in tokens:
-        print(token)
+    expr = Parser(tokens, reporter).parse()
+
+    print(expr)
 
 
 def _run_file(path: str) -> int:

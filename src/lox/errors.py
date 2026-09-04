@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from .tokens import Token, TokenKind
 
 
 class LoxError(Exception):
@@ -14,7 +15,7 @@ class ScanError(LoxError):
     line: int
     message: str
 
-    def __str__(self) -> str:  # pragma: no cover - formato
+    def __str__(self) -> str:  
         return f"[linea {self.line}] Error lexico: {self.message}"
 
 
@@ -30,3 +31,13 @@ class ErrorReporter:
 
     def reset(self) -> None:
         self.had_error = False
+
+
+@dataclass
+class ParseError(LoxError):
+    token: Token
+    message: str
+    def __str__(self) -> str:
+        if self.token.kind == TokenKind.EOF:
+            return f"[linea {self.token.line}] Error sintactico al final: {self.message}"
+        return f"[linea {self.token.line}] Error sintactico en '{self.token.lexeme}': {self.message}"

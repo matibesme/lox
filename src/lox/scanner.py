@@ -29,16 +29,12 @@ class Scanner:
         self._current = 0  # caracter que estamos mirando
         self._line = 1
 
-    # -- API publica --------------------------------------------------------
-
     def scan_tokens(self) -> list[Token]:
         while not self._at_end():
             self._start = self._current
             self._scan_token()
         self._tokens.append(Token(TokenKind.EOF, "", None, self._line))
         return self._tokens
-
-    # -- Nucleo del scanner -------------------------------------------------
 
     def _scan_token(self) -> None:
         c = self._advance()
