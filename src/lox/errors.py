@@ -24,14 +24,18 @@ class ErrorReporter:
 
     def __init__(self) -> None:
         self.had_error = False
+        self.had_runtime_error = False
 
     def report(self, error: LoxError) -> None:
         print(str(error))
-        self.had_error = True
+        if isinstance(error, LoxRuntimeError):
+            self.had_runtime_error = True
+        else:
+            self.had_error = True
 
     def reset(self) -> None:
         self.had_error = False
-
+        self.had_runtime_error = False
 
 @dataclass
 class ParseError(LoxError):

@@ -28,6 +28,8 @@ def _run_file(path: str) -> int:
     _run(source, reporter, interpreter)
     if reporter.had_error:
         return 65
+    if reporter.had_runtime_error:
+        return 70
     return 0
 
 
