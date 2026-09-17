@@ -7,13 +7,18 @@ import sys
 from .errors import ErrorReporter
 from .scanner import Scanner
 from .parser import Parser
+from .interpreter import Interpreter
 
 
 def _run(source: str, reporter: ErrorReporter) -> None:
     tokens = Scanner(source, reporter).scan_tokens()
+    if reporter.had_error:
+        return
     expr = Parser(tokens, reporter).parse()
-
-    print(expr)
+    if reporter.had_error or expr is None:
+        return
+    interpreter = Interpreter(reporter)
+    interpreter.interpret(expr)
 
 
 def _run_file(path: str) -> int:

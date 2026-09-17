@@ -41,3 +41,10 @@ class ParseError(LoxError):
         if self.token.kind == TokenKind.EOF:
             return f"[linea {self.token.line}] Error sintactico al final: {self.message}"
         return f"[linea {self.token.line}] Error sintactico en '{self.token.lexeme}': {self.message}"
+
+@dataclass
+class LoxRuntimeError(LoxError):
+    token: Token
+    message: str
+    def __str__(self) -> str:
+        return f"[linea {self.token.line}] Error en tiempo de ejecucion: {self.message}"
