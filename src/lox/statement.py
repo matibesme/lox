@@ -29,4 +29,14 @@ class VarStmt(Stmt):
 class BlockStmt(Stmt):
     statements: list[Stmt]
 
+@dataclass(frozen=True,slots=True)
+class IfStmt(Stmt):
+    condition: Expr
+    then_branch: Stmt
+    else_branch: Stmt | None
 
+
+@dataclass(frozen=True,slots=True)
+class WhileStmt(Stmt):
+    condition: Expr
+    body: Stmt

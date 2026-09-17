@@ -1,3 +1,5 @@
+from lox.statement import WhileStmt
+from lox.statement import IfStmt
 from lox.expr import LogicalExpr
 from typing import Any
 from lox.tokens import Token, TokenKind
@@ -54,9 +56,18 @@ class Interpreter:
                 self.run(statement)
         finally:
             self.environment = previous  # Restaura el entorno padre incluso si hay error
-
-   
-
+    
+    @run.register
+    def _(self, stmt: IfStmt) -> None:
+        condition = self.evaluate(stmt.condition)
+        if self._is_truthy(condition):
+            self.run(stmt.then_branch)
+        elif stmt.else_branch is not None:
+            self.run(stmt.else_branch)
+    @run.register
+    def _(self, stmt: WhileStmt) -> None:
+        while self._is_truthy(self.evaluate(stmt.condition)):
+            self.run(stmt.body)
 
 ## Evaluar expresiones
     @singledispatchmethod

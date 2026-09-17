@@ -1,9 +1,8 @@
-from lox.errors import ErrorReporter
-from .errors import ParseError
-from .tokens import Token, TokenKind
-from .expr import Expr, BinaryExpr, UnaryExpr, LiteralExpr, GroupingExpr, VariableExpr, AssignExpr, LogicalExpr
 from typing import Callable
-from .statement import BlockStmt, ExpressionStmt, PrintStmt, Stmt, VarStmt
+from lox.errors import ErrorReporter, ParseError
+from lox.statement import BlockStmt, ExpressionStmt, PrintStmt, Stmt, VarStmt, IfStmt, WhileStmt
+from lox.tokens import Token, TokenKind
+from lox.expr import Expr, BinaryExpr, UnaryExpr, LiteralExpr, GroupingExpr, VariableExpr, AssignExpr, LogicalExpr
 
 
 class Parser:
@@ -46,6 +45,12 @@ class Parser:
             return self._print_statement()
         if self._match(TokenKind.LEFT_BRACE):
             return BlockStmt(self._block())
+        if self._match(TokenKind.IF):
+            return self._if_statement()
+        if self._match(TokenKind.WHILE):
+            return self._while_statement()
+        if self._match(TokenKind.FOR):
+            return self._for_statement()
         return self._expression_statement()
 
     def _print_statement(self) -> Stmt:
@@ -67,6 +72,65 @@ class Parser:
 
         self._consume(TokenKind.RIGHT_BRACE, "Se esperaba '}' despues del bloque.")
         return statements
+    
+    def _if_statement(self) -> Stmt:
+        self._consume(TokenKind.LEFT_PAREN, "Se esperaba '(' despues de 'if'.")
+        condition = self._expression()
+        self._consume(TokenKind.RIGHT_PAREN, "Se esperaba ')' despues de la condicion.")
+
+        then_branch = self._statement()
+
+        else_branch: Stmt | None = None
+        if self._match(TokenKind.ELSE):
+            else_branch = self._statement()
+
+        return IfStmt(condition, then_branch, else_branch)
+    
+    def _while_statement(self) -> Stmt:
+        self._consume(TokenKind.LEFT_PAREN, "Se esperaba '(' despues de 'while'.")
+        condition = self._expression()
+        self._consume(TokenKind.RIGHT_PAREN, "Se esperaba ')' despues de la condicion.")
+        body = self._statement()
+        return WhileStmt(condition, body)
+    
+    def _for_statement(self) -> Stmt:
+        # Azúcar sintáctico: descompone el for en un bloque que contiene
+        # la inicialización y un bucle while con la condición y el incremento.
+        self._consume(TokenKind.LEFT_PAREN, "Se esperaba '(' despues de 'for'.")
+
+        if self._match(TokenKind.SEMICOLON):
+            start = None
+        elif self._match(TokenKind.VAR):
+            start = self._var_declaration()
+        else:
+            start = self._expression_statement()
+
+        condition: Expr | None = None
+        if not self._check_token(TokenKind.SEMICOLON):
+            condition = self._expression()
+        self._consume(TokenKind.SEMICOLON, "Se esperaba ';' despues de la condicion.")
+
+        increment: Expr | None = None
+        if not self._check_token(TokenKind.RIGHT_PAREN):
+            increment = self._expression()
+        self._consume(TokenKind.RIGHT_PAREN, "Se esperaba ')' despues del 'for'.")
+
+        body = self._statement()
+        if increment is not None:
+            body = BlockStmt([body, ExpressionStmt(increment)])
+
+        if condition is None:
+            condition = LiteralExpr(True)
+        body = WhileStmt(condition, body)
+
+        if start is not None:
+            body = BlockStmt([start, body])
+
+        return body
+
+
+
+
 
 
 ## operaciones 
