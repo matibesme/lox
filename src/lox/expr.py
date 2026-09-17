@@ -38,4 +38,11 @@ class GroupingExpr(Expr):
     def __str__(self) -> str:
         return f"({self.expression})"
 
-    
+@dataclass(frozen=True, slots=True)
+class VariableExpr(Expr):
+    name: Token
+
+@dataclass(frozen=True, slots=True)
+class AssignExpr(Expr):
+    name: Token
+    value: Expr

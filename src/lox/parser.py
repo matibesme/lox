@@ -1,8 +1,10 @@
 from lox.errors import ErrorReporter
 from .errors import ParseError
 from .tokens import Token, TokenKind
-from .expr import Expr, BinaryExpr, UnaryExpr, LiteralExpr, GroupingExpr
+from .expr import Expr, BinaryExpr, UnaryExpr, LiteralExpr, GroupingExpr, VariableExpr, AssignExpr
 from typing import Callable
+from .statement import BlockStmt, ExpressionStmt, PrintStmt, Stmt, VarStmt
+
 
 class Parser:
     def __init__(self, tokens: list[Token], reporter: ErrorReporter | None = None) -> None:
@@ -11,15 +13,65 @@ class Parser:
         self._current = 0
        
     
-    def parse(self) -> Expr:
-        try: 
-            return self._expression()
+    def parse(self) -> list[Stmt]:
+        statements: list[Stmt] = []
+        while not self._is_end():
+            stmt = self._declaration()
+            if stmt is not None:
+                statements.append(stmt)
+        return statements
+
+## Statements rules
+    def _declaration(self) -> Stmt | None:
+        try:
+            if self._match(TokenKind.VAR):
+                return self._var_declaration()
+            return self._statement()
         except ParseError:
+            self._skip_to_next_statement()
             return None
+
+    def _var_declaration(self) -> Stmt:
+        name = self._consume(TokenKind.IDENTIFIER, "Se esperaba el nombre de la variable.")
+
+        initializer: Expr | None = None
+        if self._match(TokenKind.EQUAL):
+            initializer = self._expression()
+
+        self._consume(TokenKind.SEMICOLON, "Se esperaba ';' despues de la declaracion de variable.")
+        return VarStmt(name, initializer)
+
+    def _statement(self) -> Stmt:
+        if self._match(TokenKind.PRINT):
+            return self._print_statement()
+        if self._match(TokenKind.LEFT_BRACE):
+            return BlockStmt(self._block())
+        return self._expression_statement()
+
+    def _print_statement(self) -> Stmt:
+        value = self._expression()
+        self._consume(TokenKind.SEMICOLON, "Se esperaba ';' despues del valor.")
+        return PrintStmt(value)
+
+    def _expression_statement(self) -> Stmt:
+        expr = self._expression()
+        self._consume(TokenKind.SEMICOLON, "Se esperaba ';' despues de la expresion.")
+        return ExpressionStmt(expr)
+
+    def _block(self) -> list[Stmt]:
+        statements: list[Stmt] = []
+        while not self._check_token(TokenKind.RIGHT_BRACE) and not self._is_end():
+            stmt = self._declaration()
+            if stmt is not None:
+                statements.append(stmt)
+
+        self._consume(TokenKind.RIGHT_BRACE, "Se esperaba '}' despues del bloque.")
+        return statements
+
 
 ## operaciones 
     def _expression(self) -> Expr:
-        return self._equality()
+        return self._assignment()
 
 
 ## operaciones binarias 
@@ -58,6 +110,8 @@ class Parser:
             expr = self._expression()
             self._consume(TokenKind.RIGHT_PAREN, "Se esperaba cierre de parentesis.")
             return GroupingExpr(expr)
+        if self._match(TokenKind.IDENTIFIER):
+            return VariableExpr(self._previous())
         raise self._error(self._peek(), "Se esperaba una expresión.")
 
         
@@ -107,7 +161,41 @@ class Parser:
         if self._check_token(token_kind):
             return self._next()
         raise self._error(self._peek(), message)  
+
+    def _assignment(self) -> Expr:
+        expr = self._equality()
+        if self._match(TokenKind.EQUAL):
+            equals = self._previous()
+            value = self._assignment()  # Recursivo para permitir a = b = 5
+            if isinstance(expr, VariableExpr):
+                name = expr.name
+                return AssignExpr(name, value)
+            raise self._error(equals, "Objetivo de asignacion invalido.")
+        return expr
+
 # error
+
+    def _skip_to_next_statement(self) -> None:
+            """Descarta tokens hasta encontrar el inicio del siguiente statement"""
+            self._next()
+            while not self._is_end():
+                if self._previous().kind == TokenKind.SEMICOLON:
+                    return
+                if self._peek().kind in (
+                    TokenKind.CLASS,
+                    TokenKind.FUN,
+                    TokenKind.VAR,
+                    TokenKind.FOR,
+                    TokenKind.IF,
+                    TokenKind.WHILE,
+                    TokenKind.PRINT,
+                    TokenKind.RETURN,
+                ):
+                    return
+                self._next()
+
+
+
     def _error(self, token: Token, message: str) -> ParseError:
         error = ParseError(token, message)
         self._reporter.report(error)

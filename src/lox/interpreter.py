@@ -2,20 +2,60 @@ from typing import Any
 from lox.tokens import Token, TokenKind
 from lox.errors import LoxRuntimeError, ErrorReporter
 from functools import singledispatchmethod
-from lox.expr import BinaryExpr, Expr, GroupingExpr, LiteralExpr, UnaryExpr
+from lox.expr import BinaryExpr, Expr, GroupingExpr, LiteralExpr, UnaryExpr, AssignExpr, VariableExpr
+from lox.enviroment import Environment
+from lox.statement import Stmt, PrintStmt, ExpressionStmt, VarStmt, BlockStmt
 
 class Interpreter:
 
     def __init__(self, reporter: ErrorReporter | None = None) -> None:
         self._reporter = reporter or ErrorReporter()
-        
-    def interpret(self, expr: Expr) -> None:
+        self.environment = Environment()
+
+    def interpret(self, statements: list[Stmt]) -> None:
         try:
-            value = self.evaluate(expr)
-            print(self._stringify(value))
+            for stmt in statements:
+                self.run(stmt)
         except LoxRuntimeError as error:
             self._reporter.report(error)
 
+## Ejecutar Statements
+    @singledispatchmethod
+    def run(self, stmt: Stmt) -> None:
+        raise NotImplementedError(f"Tipo de statement no soportado: {type(stmt)}")
+
+    @run.register
+    def _(self, stmt: PrintStmt) -> None:
+        value = self.evaluate(stmt.expression)
+        print(self._stringify(value))
+
+    @run.register
+    def _(self, stmt: ExpressionStmt) -> None:
+        self.evaluate(stmt.expression)
+
+    @run.register
+    def _(self, stmt: VarStmt) -> None:
+        value = None
+        if stmt.initializer is not None:
+            value = self.evaluate(stmt.initializer)
+        self.environment.define(stmt.name.lexeme, value)
+
+    @run.register
+    def _(self, stmt: BlockStmt) -> None:
+        self.run_block(stmt.statements, Environment(enclosing=self.environment))
+
+    ## para reutilizar el codigo en el futuro cuando tengamos funciones   
+    def run_block(self, statements: list[Stmt], environment: Environment) -> None:
+        previous = self.environment
+        try:
+            self.environment = environment
+            for statement in statements:
+                self.run(statement)
+        finally:
+            self.environment = previous  # Restaura el entorno padre incluso si hay error
+
+
+## Evaluar expresiones
     @singledispatchmethod
     def evaluate(self, expr: Expr) -> Any:
         raise NotImplementedError(f"Tipo de expresion no soportada: {type(expr)}")
@@ -91,7 +131,15 @@ class Interpreter:
 
         raise LoxRuntimeError(op, f"Operador binario no soportado: {op.lexeme}")
 
-
+    @evaluate.register
+    def _(self, expr: VariableExpr) -> Any:
+        return self.environment.get(expr.name)
+    
+    @evaluate.register
+    def _(self, expr: AssignExpr) -> Any:
+        value = self.evaluate(expr.value)
+        self.environment.assign(expr.name, value)
+        return value
 
     def _is_equal(self, left: Any, right: Any) -> bool:
         return left == right
