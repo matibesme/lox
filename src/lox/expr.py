@@ -46,3 +46,12 @@ class VariableExpr(Expr):
 class AssignExpr(Expr):
     name: Token
     value: Expr
+
+@dataclass(frozen=True, slots=True)
+class LogicalExpr(Expr):
+    left: Expr
+    operator: Token
+    right: Expr
+
+    def __str__(self) -> str:
+        return f"({self.left} {self.operator.kind.name} {self.right})"

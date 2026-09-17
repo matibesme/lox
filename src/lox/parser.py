@@ -1,7 +1,7 @@
 from lox.errors import ErrorReporter
 from .errors import ParseError
 from .tokens import Token, TokenKind
-from .expr import Expr, BinaryExpr, UnaryExpr, LiteralExpr, GroupingExpr, VariableExpr, AssignExpr
+from .expr import Expr, BinaryExpr, UnaryExpr, LiteralExpr, GroupingExpr, VariableExpr, AssignExpr, LogicalExpr
 from typing import Callable
 from .statement import BlockStmt, ExpressionStmt, PrintStmt, Stmt, VarStmt
 
@@ -75,6 +75,22 @@ class Parser:
 
 
 ## operaciones binarias 
+    def _or(self) -> Expr:
+        expr = self._and()
+        while self._match(TokenKind.OR):
+            operator = self._previous()
+            right = self._and()
+            expr = LogicalExpr(expr, operator, right)
+        return expr
+    
+    def _and(self) -> Expr:
+        expr = self._equality()
+        while self._match(TokenKind.AND):
+            operator = self._previous()
+            right = self._equality()
+            expr = LogicalExpr(expr, operator, right)
+        return expr
+
     def _equality(self) -> Expr:
         return self._binary(self._comparison, TokenKind.BANG_EQUAL, TokenKind.EQUAL_EQUAL)
     
@@ -87,7 +103,7 @@ class Parser:
     def _factor(self) -> Expr:
         return self._binary(self._unary, TokenKind.STAR, TokenKind.SLASH)
     
-
+   
 # operaciones unarias
     def _unary(self) -> Expr:
         if self._match(TokenKind.BANG, TokenKind.MINUS):
@@ -114,7 +130,7 @@ class Parser:
             return VariableExpr(self._previous())
         raise self._error(self._peek(), "Se esperaba una expresión.")
 
-        
+    
 # helpers
 
     def _binary(self, operand_parser: Callable[[], Expr], *operators: TokenKind) -> Expr:
@@ -163,15 +179,16 @@ class Parser:
         raise self._error(self._peek(), message)  
 
     def _assignment(self) -> Expr:
-        expr = self._equality()
+        expr = self._or()  
         if self._match(TokenKind.EQUAL):
             equals = self._previous()
-            value = self._assignment()  # Recursivo para permitir a = b = 5
+            value = self._assignment()
             if isinstance(expr, VariableExpr):
                 name = expr.name
                 return AssignExpr(name, value)
             raise self._error(equals, "Objetivo de asignacion invalido.")
         return expr
+
 
 # error
 

@@ -1,3 +1,4 @@
+from lox.expr import LogicalExpr
 from typing import Any
 from lox.tokens import Token, TokenKind
 from lox.errors import LoxRuntimeError, ErrorReporter
@@ -53,6 +54,8 @@ class Interpreter:
                 self.run(statement)
         finally:
             self.environment = previous  # Restaura el entorno padre incluso si hay error
+
+   
 
 
 ## Evaluar expresiones
@@ -140,6 +143,19 @@ class Interpreter:
         value = self.evaluate(expr.value)
         self.environment.assign(expr.name, value)
         return value
+
+    @evaluate.register
+    def _(self, expr: LogicalExpr) -> Any:
+        left = self.evaluate(expr.left)
+
+        if expr.operator.kind == TokenKind.OR:
+            if self._is_truthy(left):
+                return left
+        else:  
+            if not self._is_truthy(left):
+                return left
+
+        return self.evaluate(expr.right)
 
     def _is_equal(self, left: Any, right: Any) -> bool:
         return left == right
