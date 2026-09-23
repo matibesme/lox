@@ -31,3 +31,19 @@ class Environment:
                 return
             curr = curr.enclosing
         raise LoxRuntimeError(name, f"Variable no definida '{name.lexeme}'.")
+
+    def ancestor(self, distance: int) -> Environment:
+        """Sube `distance` niveles de enviroments padres."""
+        env = self
+        for _ in range(distance):
+            assert env.enclosing is not None
+            env = env.enclosing
+        return env
+
+    def get_at(self, distance: int, name: str) -> Any:
+        """Busca una variable que el resolver ya ubico a `distance` saltos."""
+        return self.ancestor(distance).values[name]
+
+    def assign_at(self, distance: int, name: Token, value: Any) -> None:
+        """Reasigna una variable que el resolver ya ubico a `distance` saltos."""
+        self.ancestor(distance).values[name.lexeme] = value

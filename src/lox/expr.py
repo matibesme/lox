@@ -55,3 +55,13 @@ class LogicalExpr(Expr):
 
     def __str__(self) -> str:
         return f"({self.left} {self.operator.kind.name} {self.right})"
+
+@dataclass(frozen=True, slots=True)
+class CallExpr(Expr):
+    callee: Expr
+    paren: Token
+    arguments: list[Expr]
+
+    def __str__(self) -> str:
+        args = ", ".join(str(arg) for arg in self.arguments)
+        return f"{self.callee}({args})"

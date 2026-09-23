@@ -52,3 +52,10 @@ class LoxRuntimeError(LoxError):
     message: str
     def __str__(self) -> str:
         return f"[linea {self.token.line}] Error en tiempo de ejecucion: {self.message}"
+
+@dataclass
+class ResolverError(LoxError):
+    token: Token
+    message: str
+    def __str__(self) -> str:
+        return f"[linea {self.token.line}] Error de resolucion en '{self.token.lexeme}': {self.message}"

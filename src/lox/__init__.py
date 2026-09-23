@@ -8,6 +8,7 @@ from .errors import ErrorReporter
 from .scanner import Scanner
 from .parser import Parser
 from .interpreter import Interpreter
+from .resolver import Resolver
 
 
 def _run(source: str, reporter: ErrorReporter, interpreter: Interpreter) -> None:
@@ -15,6 +16,9 @@ def _run(source: str, reporter: ErrorReporter, interpreter: Interpreter) -> None
     if reporter.had_error:
         return
     statements = Parser(tokens, reporter).parse()
+    if reporter.had_error:
+        return
+    Resolver(interpreter, reporter).resolve(statements)
     if reporter.had_error:
         return
     interpreter.interpret(statements)

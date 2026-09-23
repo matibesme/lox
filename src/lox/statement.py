@@ -40,3 +40,14 @@ class IfStmt(Stmt):
 class WhileStmt(Stmt):
     condition: Expr
     body: Stmt
+
+@dataclass(frozen=True,slots=True)
+class FunctionStmt(Stmt):
+    name: Token
+    params: list[Token]
+    body: list[Stmt]
+
+@dataclass(frozen=True,slots=True)
+class ReturnStmt(Stmt):
+    keyword: Token
+    value: Expr | None

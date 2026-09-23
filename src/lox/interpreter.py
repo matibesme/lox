@@ -5,15 +5,22 @@ from typing import Any
 from lox.tokens import Token, TokenKind
 from lox.errors import LoxRuntimeError, ErrorReporter
 from functools import singledispatchmethod
-from lox.expr import BinaryExpr, Expr, GroupingExpr, LiteralExpr, UnaryExpr, AssignExpr, VariableExpr
+from lox.expr import BinaryExpr, Expr, GroupingExpr, LiteralExpr, UnaryExpr, AssignExpr, VariableExpr, CallExpr
 from lox.enviroment import Environment
-from lox.statement import Stmt, PrintStmt, ExpressionStmt, VarStmt, BlockStmt
+from lox.statement import Stmt, PrintStmt, ExpressionStmt, VarStmt, BlockStmt, FunctionStmt, ReturnStmt
+from lox.callable import LoxCallable
+from lox.functions import LoxFunction
+from lox.natives import ClockNative
+from lox.signals import ReturnSignal
 
 class Interpreter:
 
     def __init__(self, reporter: ErrorReporter | None = None) -> None:
         self._reporter = reporter or ErrorReporter()
-        self.environment = Environment()
+        self.globals = Environment()
+        self.environment = self.globals
+        self.globals.define("clock", ClockNative())
+        self._locals: dict[int, int] = {}
 
     def interpret(self, statements: list[Stmt]) -> None:
         try:
@@ -21,6 +28,10 @@ class Interpreter:
                 self.run(stmt)
         except LoxRuntimeError as error:
             self._reporter.report(error)
+
+    def resolve(self, expr: Expr, depth: int) -> None:
+        """El resolver ya calculo a cuantos enviroments hay que subir para encontrar `expr`."""
+        self._locals[id(expr)] = depth
 
 ## Ejecutar Statements
     @singledispatchmethod
@@ -69,6 +80,18 @@ class Interpreter:
         while self._is_truthy(self.evaluate(stmt.condition)):
             self.run(stmt.body)
 
+    @run.register
+    def _(self, stmt: FunctionStmt) -> None:
+        function = LoxFunction(stmt, self.environment)
+        self.environment.define(stmt.name.lexeme, function)
+
+    @run.register
+    def _(self, stmt: ReturnStmt) -> None:
+        value = None
+        if stmt.value is not None:
+            value = self.evaluate(stmt.value)
+        raise ReturnSignal(value)
+
 ## Evaluar expresiones
     @singledispatchmethod
     def evaluate(self, expr: Expr) -> Any:
@@ -114,6 +137,12 @@ class Interpreter:
             self._check_number_operands(op, left, right)
             return left * right
 
+        elif op.kind == TokenKind.PERCENT:
+            self._check_number_operands(op, left, right)
+            if right == 0:
+                raise LoxRuntimeError(op, "Modulo por cero.")
+            return float(int(left) % int(right))
+
         elif op.kind == TokenKind.PLUS:
             if isinstance(left, float) and isinstance(right, float):
                 return left + right
@@ -147,13 +176,37 @@ class Interpreter:
 
     @evaluate.register
     def _(self, expr: VariableExpr) -> Any:
-        return self.environment.get(expr.name)
-    
+        return self._look_up_variable(expr.name, expr)
+
     @evaluate.register
     def _(self, expr: AssignExpr) -> Any:
         value = self.evaluate(expr.value)
-        self.environment.assign(expr.name, value)
+        distance = self._locals.get(id(expr))
+        if distance is not None:
+            self.environment.assign_at(distance, expr.name, value)
+        else:
+            self.globals.assign(expr.name, value)
         return value
+
+    def _look_up_variable(self, name: Token, expr: Expr) -> Any:
+        distance = self._locals.get(id(expr))
+        if distance is not None:
+            return self.environment.get_at(distance, name.lexeme)
+        return self.globals.get(name)
+
+    @evaluate.register
+    def _(self, expr: CallExpr) -> Any:
+        callee = self.evaluate(expr.callee)
+        arguments = [self.evaluate(argument) for argument in expr.arguments]
+
+        if not isinstance(callee, LoxCallable):
+            raise LoxRuntimeError(expr.paren, "Solo se pueden invocar funciones y clases.")
+        if len(arguments) != callee.arity():
+            raise LoxRuntimeError(
+                expr.paren,
+                f"Se esperaban {callee.arity()} argumentos pero se recibieron {len(arguments)}.",
+            )
+        return callee.call(self, arguments)
 
     @evaluate.register
     def _(self, expr: LogicalExpr) -> Any:

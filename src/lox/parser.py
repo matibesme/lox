@@ -1,8 +1,8 @@
 from typing import Callable
 from lox.errors import ErrorReporter, ParseError
-from lox.statement import BlockStmt, ExpressionStmt, PrintStmt, Stmt, VarStmt, IfStmt, WhileStmt
+from lox.statement import BlockStmt, ExpressionStmt, PrintStmt, Stmt, VarStmt, IfStmt, WhileStmt, FunctionStmt, ReturnStmt
 from lox.tokens import Token, TokenKind
-from lox.expr import Expr, BinaryExpr, UnaryExpr, LiteralExpr, GroupingExpr, VariableExpr, AssignExpr, LogicalExpr
+from lox.expr import Expr, BinaryExpr, UnaryExpr, LiteralExpr, GroupingExpr, VariableExpr, AssignExpr, LogicalExpr, CallExpr
 
 
 class Parser:
@@ -23,12 +23,32 @@ class Parser:
 ## Statements rules
     def _declaration(self) -> Stmt | None:
         try:
+            if self._match(TokenKind.FUN):
+                return self._function_declaration("funcion")
             if self._match(TokenKind.VAR):
                 return self._var_declaration()
             return self._statement()
         except ParseError:
             self._skip_to_next_statement()
             return None
+
+    def _function_declaration(self, kind: str) -> Stmt:
+        name = self._consume(TokenKind.IDENTIFIER, f"Se esperaba el nombre de la {kind}.")
+        self._consume(TokenKind.LEFT_PAREN, f"Se esperaba '(' despues del nombre de la {kind}.")
+
+        params: list[Token] = []
+        if not self._check_token(TokenKind.RIGHT_PAREN):
+            while True:
+                if len(params) >= 255:
+                    self._error(self._peek(), "No se pueden tener mas de 255 parametros.")
+                params.append(self._consume(TokenKind.IDENTIFIER, "Se esperaba el nombre del parametro."))
+                if not self._match(TokenKind.COMMA):
+                    break
+        self._consume(TokenKind.RIGHT_PAREN, "Se esperaba ')' despues de los parametros.")
+
+        self._consume(TokenKind.LEFT_BRACE, f"Se esperaba '{{' antes del cuerpo de la {kind}.")
+        body = self._block()
+        return FunctionStmt(name, params, body)
 
     def _var_declaration(self) -> Stmt:
         name = self._consume(TokenKind.IDENTIFIER, "Se esperaba el nombre de la variable.")
@@ -51,7 +71,17 @@ class Parser:
             return self._while_statement()
         if self._match(TokenKind.FOR):
             return self._for_statement()
+        if self._match(TokenKind.RETURN):
+            return self._return_statement()
         return self._expression_statement()
+
+    def _return_statement(self) -> Stmt:
+        keyword = self._previous()
+        value: Expr | None = None
+        if not self._check_token(TokenKind.SEMICOLON):
+            value = self._expression()
+        self._consume(TokenKind.SEMICOLON, "Se esperaba ';' despues del valor de retorno.")
+        return ReturnStmt(keyword, value)
 
     def _print_statement(self) -> Stmt:
         value = self._expression()
@@ -165,7 +195,7 @@ class Parser:
         return self._binary(self._factor, TokenKind.PLUS, TokenKind.MINUS)
 
     def _factor(self) -> Expr:
-        return self._binary(self._unary, TokenKind.STAR, TokenKind.SLASH)
+        return self._binary(self._unary, TokenKind.STAR, TokenKind.SLASH, TokenKind.PERCENT)
     
    
 # operaciones unarias
@@ -174,7 +204,26 @@ class Parser:
             operator = self._previous()
             right = self._unary()
             return UnaryExpr(operator=operator, right=right)
-        return self._primary()
+        return self._call()
+
+# llamadas: nombre(args) o cualquier expresion que resuelva a una funcion, ej getFn()(3)
+    def _call(self) -> Expr:
+        expr = self._primary()
+        while self._match(TokenKind.LEFT_PAREN):
+            expr = self._finish_call(expr)
+        return expr
+
+    def _finish_call(self, callee: Expr) -> Expr:
+        arguments: list[Expr] = []
+        if not self._check_token(TokenKind.RIGHT_PAREN):
+            while True:
+                if len(arguments) >= 255:
+                    self._error(self._peek(), "No se pueden tener mas de 255 argumentos.")
+                arguments.append(self._expression())
+                if not self._match(TokenKind.COMMA):
+                    break
+        paren = self._consume(TokenKind.RIGHT_PAREN, "Se esperaba ')' despues de los argumentos.")
+        return CallExpr(callee, paren, arguments)
 
 # objetos primarios
     def _primary(self) -> Expr:
