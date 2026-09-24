@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-
+import readline
 from .errors import ErrorReporter
 from .scanner import Scanner
 from .parser import Parser
