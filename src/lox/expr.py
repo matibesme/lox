@@ -1,7 +1,14 @@
 from lox.tokens import Token
-from dataclasses import dataclass
-class Expr:
-    pass
+from dataclasses import dataclass, field
+from abc import ABC
+import itertools
+
+
+_expr_counter = itertools.count()
+
+@dataclass(frozen=True, slots=True)
+class Expr(ABC):
+    id: int = field(default_factory=_expr_counter.__next__, init=False, compare=False, hash=False)
 
 @dataclass(frozen=True, slots=True)
 class LiteralExpr(Expr):

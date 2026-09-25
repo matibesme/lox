@@ -31,7 +31,7 @@ class Interpreter:
 
     def resolve(self, expr: Expr, depth: int) -> None:
         """El resolver ya calculo a cuantos enviroments hay que subir para encontrar `expr`."""
-        self._locals[id(expr)] = depth
+        self._locals[expr.id] = depth
 
 ## Ejecutar Statements
     @singledispatchmethod
@@ -181,7 +181,7 @@ class Interpreter:
     @evaluate.register
     def _(self, expr: AssignExpr) -> Any:
         value = self.evaluate(expr.value)
-        distance = self._locals.get(id(expr))
+        distance = self._locals.get(expr.id)
         if distance is not None:
             self.environment.assign_at(distance, expr.name, value)
         else:
@@ -189,7 +189,7 @@ class Interpreter:
         return value
 
     def _look_up_variable(self, name: Token, expr: Expr) -> Any:
-        distance = self._locals.get(id(expr))
+        distance = self._locals.get(expr.id)
         if distance is not None:
             return self.environment.get_at(distance, name.lexeme)
         return self.globals.get(name)
