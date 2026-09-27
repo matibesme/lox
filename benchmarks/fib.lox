@@ -1,0 +1,7 @@
+// Recursion pesada: mide el costo de llamadas a funcion y de aritmetica.
+fun fib(n) {
+    if (n < 2) return n;
+    return fib(n - 1) + fib(n - 2);
+}
+
+print fib(24);

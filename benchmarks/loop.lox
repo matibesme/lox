@@ -1,0 +1,8 @@
+// Loop apretado: mide el costo de evaluar condiciones, asignaciones y aritmetica.
+var i = 0;
+var sum = 0;
+while (i < 200000) {
+    sum = sum + i;
+    i = i + 1;
+}
+print sum;
