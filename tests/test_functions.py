@@ -88,16 +88,5 @@ class TestErroresDeLlamadas(unittest.TestCase):
         self.assertTrue(resultado.reporter.had_runtime_error)
 
 
-class TestNativas(unittest.TestCase):
-    def test_clock_no_recibe_argumentos_y_devuelve_numero(self):
-        resultado = run("print clock() >= 0;")
-        self.assertFalse(resultado.reporter.had_runtime_error)
-        self.assertEqual(resultado.lines, ["true"])
-
-    def test_clock_con_argumentos_es_error(self):
-        resultado = run("clock(1);")
-        self.assertTrue(resultado.reporter.had_runtime_error)
-
-
 if __name__ == "__main__":
     unittest.main()

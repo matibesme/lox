@@ -10,7 +10,6 @@ from lox.enviroment import Environment
 from lox.statement import Stmt, PrintStmt, ExpressionStmt, VarStmt, BlockStmt, FunctionStmt, ReturnStmt
 from lox.callable import LoxCallable
 from lox.functions import LoxFunction
-from lox.natives import ClockNative
 from lox.signals import ReturnSignal
 
 class Interpreter:
@@ -19,7 +18,6 @@ class Interpreter:
         self._reporter = reporter or ErrorReporter()
         self.globals = Environment()
         self.environment = self.globals
-        self.globals.define("clock", ClockNative())
         self._locals: dict[int, int] = {}
 
     def interpret(self, statements: list[Stmt]) -> None:
