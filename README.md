@@ -130,7 +130,22 @@ Acá dejamos de ser una calculadora que solo evalúa números y pasamos a un len
       finally:
           self.environment = previous
   ```
-- **Closures:** Cuando se define una función, esta se guarda una referencia al entorno donde nació (`closure`). Así, cuando la llamamos más adelante desde otro lugar, mantiene acceso a las variables del entorno donde fue definida, aunque ese bloque ya haya terminado.
+- **Funciones, Closures y enclosing:**
+  - **Al declararse:** la función guarda el entorno actual en el que fue creada como su `closure` (`LoxFunction(stmt, self.environment)`).
+  - **Al invocarse:** se crea un entorno local para sus parámetros cuyo padre (`enclosing`) es justamente ese closure:
+  ```python
+  def call(self, interpreter: Interpreter, arguments: list[Any]) -> Any:
+      environment = Environment(enclosing=self.closure)
+      for param, argument in zip(self.declaration.params, arguments):
+          environment.define(param.lexeme, argument)
+
+      try:
+          interpreter.run_block(self.declaration.body, environment)
+      except ReturnSignal as signal:
+          return signal.value
+      return None
+  ```
+  De esta forma, la resolución de variables sube por la cadena de `enclosing` hacia donde nació la función y no hacia donde se la llama.
 
 ### Resolver
 Análisis semántico: recorre el AST una sola vez antes de ejecutar para fijar el alcance léxico y detectar errores estáticos.
