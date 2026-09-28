@@ -38,27 +38,23 @@ Resultado de las pruebas de rendimiento, presentadas con un grafico y una tabla 
 | python | 0.0684 | 0.0725 | 0.0774 |
 | javascript | 0.0443 | 0.0487 | 0.0548 |
 
-## Ploxy (Implementación Besmedrisnik y Crudo) vs plox (Catedra)
+## Nuestra implementacion vs plox (Catedra)
 
-`plox` es la implementacion de referencia de la catedra en su rama
-[`full-tree-walk`](https://github.com/FdelMazo/plox/tree/full-tree-walk). Ambas estan escritas en Python, asi que esta comparacion aisla
-las decisiones de implementacion del interprete del overhead del lenguaje anfitrion
-(a diferencia de la comparacion contra Python/JS de arriba, que compara arquitecturas
-distintas).
+`plox` es la implementación de referencia de la cátedra en su rama [`full-tree-walk`](https://github.com/FdelMazo/plox/tree/full-tree-walk). Ambas implementaciones están escritas en Python, por lo que esta comparación permite enfocarnos principalmente en las diferencias entre nuestras implementaciones del intérprete, sin que el lenguaje en el que están escritas sea una diferencia entre ellas.
 
-Corridas de 5 repeticiones por benchmark, mismo metodo que arriba (tiempo de proceso
-completo, subprocess por corrida):
+Las mediciones se realizaron con 5 repeticiones por benchmark, utilizando el mismo método que en la comparación anterior: se midió el tiempo total de ejecución de cada proceso y se ejecutó cada corrida mediante `subprocess`.
 
-| Benchmark | Ploxy MIN (s) | Ploxy AVG (s) | plox MIN (s) | plox AVG (s) |
-|---|---:|---:|---:|---:|
-| fib | 2.9316 | 2.9813 | 3.1433 | 3.1931 |
-| loop | 4.1516 | 4.2111 | 4.1343 | 4.1757 |
-| string_concat | 1.2025 | 1.2242 | 1.2451 | 1.2594 |
+| Benchmark     | Lox MIN (s) | Lox AVG (s) | plox MIN (s) | plox AVG (s) |
+| :------------ | ----------: | ----------: | -----------: | -----------: |
+| fib           |      2.9316 |      2.9813 |       3.1433 |       3.1931 |
+| loop          |      4.1516 |      4.2111 |       4.1343 |       4.1757 |
+| string_concat |      1.2025 |      1.2242 |       1.2451 |       1.2594 |
 
+### Conclusiones
 
-## Conclusiones
+Los resultados muestran que ambas implementaciones tienen un rendimiento bastante similar. Lox resulta ligeramente más rápido en `fib` y `string_concat`, mientras que `plox` es ligeramente más rápido en `loop`. Las diferencias son relativamente pequeñas, por lo que no se observa una ventaja significativa de una implementación sobre la otra en estos benchmarks.
 
-- Lox es entre **18x** y **92x** mas lento que Python y JavaScript en estos tres benchmarks. Es el costo esperado de un tree-walk interpreter puro (recorre el AST con `singledispatchmethod` y crea un `Environment` nuevo por cada llamada/bloque) corriendo, a su vez, sobre el interprete de Python -- dos capas de interpretacion.
-- La brecha mas chica esta en `string_concat` (~18x-27x): ahi el costo dominante (crear y copiar strings) es compartido por las tres implementaciones, asi que el overhead del AST pesa relativamente menos.
-- La brecha mas grande esta en `loop` y `fib`: son benchmarks donde casi todo el tiempo se va en operaciones "chicas" (sumar, comparar, llamar a una funcion) que en Lox pasan por varias capas de despacho por nodo de AST, mientras que Python y sobre todo V8 (JavaScript) las compilan a bytecode/maquina muy directamente.
-- Esto es exactamente la motivacion de la Entrega Final: agregar una fase de compilacion a bytecode deberia acortar esta brecha, en particular en `loop` y `fib`, porque elimina el recorrido repetido del AST por cada iteracion/llamada.
+Esto también sirve para poner en contexto la comparación anterior: la gran diferencia de rendimiento respecto de Python y JavaScript no se debe simplemente a que el código esté escrito en Python, ya que ambas implementaciones de Lox utilizan el mismo lenguaje. La diferencia está principalmente relacionada con la forma en que ejecutamos Lox.
+
+En particular, nuestro intérprete recorre el AST para ejecutar cada operación. Esto agrega un costo adicional que se vuelve más visible en benchmarks como `loop` y `fib`, donde se realizan muchas operaciones pequeñas y repetitivas.
+
