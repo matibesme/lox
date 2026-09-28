@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 import sys
+import readline  # noqa: F401  (mejora el prompt en Unix; no existe en Windows)
 
-try:
-    import readline  # noqa: F401  (mejora el prompt en Unix; no existe en Windows)
-except ImportError:
-    pass
 from .errors import ErrorReporter
 from .scanner import Scanner
 from .parser import Parser
