@@ -38,6 +38,24 @@ Resultado de las pruebas de rendimiento, presentadas con un grafico y una tabla 
 | python | 0.0684 | 0.0725 | 0.0774 |
 | javascript | 0.0443 | 0.0487 | 0.0548 |
 
+## Ploxy (Implementación Besmedrisnik y Crudo) vs plox (Catedra)
+
+`plox` es la implementacion de referencia de la catedra en su rama
+[`full-tree-walk`](https://github.com/FdelMazo/plox/tree/full-tree-walk). Ambas estan escritas en Python, asi que esta comparacion aisla
+las decisiones de implementacion del interprete del overhead del lenguaje anfitrion
+(a diferencia de la comparacion contra Python/JS de arriba, que compara arquitecturas
+distintas).
+
+Corridas de 5 repeticiones por benchmark, mismo metodo que arriba (tiempo de proceso
+completo, subprocess por corrida):
+
+| Benchmark | Ploxy MIN (s) | Ploxy AVG (s) | plox MIN (s) | plox AVG (s) |
+|---|---:|---:|---:|---:|
+| fib | 2.9316 | 2.9813 | 3.1433 | 3.1931 |
+| loop | 4.1516 | 4.2111 | 4.1343 | 4.1757 |
+| string_concat | 1.2025 | 1.2242 | 1.2451 | 1.2594 |
+
+
 ## Conclusiones
 
 - Lox es entre **18x** y **92x** mas lento que Python y JavaScript en estos tres benchmarks. Es el costo esperado de un tree-walk interpreter puro (recorre el AST con `singledispatchmethod` y crea un `Environment` nuevo por cada llamada/bloque) corriendo, a su vez, sobre el interprete de Python -- dos capas de interpretacion.
