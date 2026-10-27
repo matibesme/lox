@@ -10,15 +10,23 @@ from lox.signals import ReturnSignal
 from lox.statement import FunctionStmt
 
 if TYPE_CHECKING:
+    from lox.classes import LoxInstance
     from lox.interpreter import Interpreter
 
 
 class LoxFunction(LoxCallable):
     """Une la declaracion parseada con el entorno donde fue declarada (su closure)."""
 
-    def __init__(self, declaration: FunctionStmt, closure: Environment) -> None:
+    def __init__(self, declaration: FunctionStmt, closure: Environment, is_initializer: bool = False) -> None:
         self.declaration = declaration
         self.closure = closure
+        self.is_initializer = is_initializer
+
+    def bind(self, instance: "LoxInstance") -> LoxFunction:
+        """Devuelve una copia del metodo cuyo closure tiene a `this` ligado a `instance`."""
+        environment = Environment(enclosing=self.closure)
+        environment.define("this", instance)
+        return LoxFunction(self.declaration, environment, self.is_initializer)
 
     def arity(self) -> int:
         return len(self.declaration.params)
@@ -31,7 +39,12 @@ class LoxFunction(LoxCallable):
         try:
             interpreter.run_block(self.declaration.body, environment)
         except ReturnSignal as signal:
+            if self.is_initializer:
+                return self.closure.get_at(0, "this")
             return signal.value
+
+        if self.is_initializer:
+            return self.closure.get_at(0, "this")
         return None
 
     def __str__(self) -> str:

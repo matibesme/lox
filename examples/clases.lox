@@ -1,0 +1,49 @@
+// Clases, herencia, super y las funcionalidades extra (+=, break, continue).
+
+class Animal {
+  init(nombre) {
+    this.nombre = nombre;
+    this.energia = 3;
+  }
+
+  hablar() { return "..."; }
+
+  presentarse() {
+    print this.nombre + " dice " + this.hablar();
+  }
+
+  correr() {
+    while (true) {
+      if (this.energia == 0) break;
+      print this.nombre + " corre";
+      this.energia -= 1;
+    }
+  }
+}
+
+class Perro < Animal {
+  init(nombre, raza) {
+    super.init(nombre);
+    this.raza = raza;
+  }
+
+  hablar() { return "Guau"; }
+
+  presentarse() {
+    super.presentarse();
+    print "  (es un " + this.raza + ")";
+  }
+}
+
+var perro = Perro("Firulais", "caniche");
+perro.presentarse();
+perro.correr();
+print perro;
+print Perro;
+
+var suma = 0;
+for (var i = 1; i <= 10; i += 1) {
+  if (i % 3 == 0) continue;
+  suma += i;
+}
+print suma; // 1+2+4+5+7+8+10 = 37

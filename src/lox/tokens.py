@@ -31,13 +31,22 @@ class TokenKind(Enum):
     LESS = auto()
     LESS_EQUAL = auto()
 
+    # Asignacion compuesta
+    PLUS_EQUAL = auto()
+    MINUS_EQUAL = auto()
+    STAR_EQUAL = auto()
+    SLASH_EQUAL = auto()
+    PERCENT_EQUAL = auto()
+
     IDENTIFIER = auto()
     STRING = auto()
     NUMBER = auto()
 
     # Palabras clave
     AND = auto()
+    BREAK = auto()
     CLASS = auto()
+    CONTINUE = auto()
     ELSE = auto()
     FALSE = auto()
     FUN = auto()
@@ -58,7 +67,9 @@ class TokenKind(Enum):
 
 KEYWORDS: dict[str, TokenKind] = {
     "and": TokenKind.AND,
+    "break": TokenKind.BREAK,
     "class": TokenKind.CLASS,
+    "continue": TokenKind.CONTINUE,
     "else": TokenKind.ELSE,
     "false": TokenKind.FALSE,
     "for": TokenKind.FOR,

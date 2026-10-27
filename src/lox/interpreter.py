@@ -5,12 +5,13 @@ from typing import Any
 from lox.tokens import Token, TokenKind
 from lox.errors import LoxRuntimeError, ErrorReporter
 from functools import singledispatchmethod
-from lox.expr import BinaryExpr, Expr, GroupingExpr, LiteralExpr, UnaryExpr, AssignExpr, VariableExpr, CallExpr
+from lox.expr import BinaryExpr, Expr, GroupingExpr, LiteralExpr, UnaryExpr, AssignExpr, VariableExpr, CallExpr, GetExpr, SetExpr, ThisExpr, SuperExpr
 from lox.enviroment import Environment
-from lox.statement import Stmt, PrintStmt, ExpressionStmt, VarStmt, BlockStmt, FunctionStmt, ReturnStmt
+from lox.statement import Stmt, PrintStmt, ExpressionStmt, VarStmt, BlockStmt, FunctionStmt, ReturnStmt, ClassStmt, BreakStmt, ContinueStmt
 from lox.callable import LoxCallable
 from lox.functions import LoxFunction
-from lox.signals import ReturnSignal
+from lox.classes import LoxClass, LoxInstance
+from lox.signals import ReturnSignal, BreakSignal, ContinueSignal
 
 class Interpreter:
 
@@ -76,7 +77,22 @@ class Interpreter:
     @run.register
     def _(self, stmt: WhileStmt) -> None:
         while self._is_truthy(self.evaluate(stmt.condition)):
-            self.run(stmt.body)
+            try:
+                self.run(stmt.body)
+            except BreakSignal:
+                break
+            except ContinueSignal:
+                pass
+            if stmt.increment is not None:
+                self.evaluate(stmt.increment)
+
+    @run.register
+    def _(self, stmt: BreakStmt) -> None:
+        raise BreakSignal()
+
+    @run.register
+    def _(self, stmt: ContinueStmt) -> None:
+        raise ContinueSignal()
 
     @run.register
     def _(self, stmt: FunctionStmt) -> None:
@@ -89,6 +105,34 @@ class Interpreter:
         if stmt.value is not None:
             value = self.evaluate(stmt.value)
         raise ReturnSignal(value)
+
+    @run.register
+    def _(self, stmt: ClassStmt) -> None:
+        superclass: LoxClass | None = None
+        if stmt.superclass is not None:
+            superclass = self.evaluate(stmt.superclass)
+            if not isinstance(superclass, LoxClass):
+                raise LoxRuntimeError(stmt.superclass.name, "La superclase debe ser una clase.")
+
+        # Se define antes de crear los metodos para que puedan referirse a la clase.
+        self.environment.define(stmt.name.lexeme, None)
+
+        # Con herencia, los metodos cierran sobre un entorno extra que tiene `super`.
+        if superclass is not None:
+            self.environment = Environment(enclosing=self.environment)
+            self.environment.define("super", superclass)
+
+        methods = {
+            method.name.lexeme: LoxFunction(method, self.environment, is_initializer=method.name.lexeme == "init")
+            for method in stmt.methods
+        }
+        klass = LoxClass(stmt.name.lexeme, superclass, methods)
+
+        if superclass is not None:
+            assert self.environment.enclosing is not None
+            self.environment = self.environment.enclosing
+
+        self.environment.assign(stmt.name, klass)
 
 ## Evaluar expresiones
     @singledispatchmethod
@@ -119,8 +163,10 @@ class Interpreter:
     def _(self, expr: BinaryExpr) -> Any:
         left = self.evaluate(expr.left)
         right = self.evaluate(expr.right)
-        op = expr.operator
+        return self._apply_binary(expr.operator, left, right)
 
+    def _apply_binary(self, op: Token, left: Any, right: Any) -> Any:
+        """Aplica un operador binario aritmetico/comparacion. Lo comparten BinaryExpr y las asignaciones compuestas."""
         if op.kind == TokenKind.MINUS:
             self._check_number_operands(op, left, right)
             return left - right
@@ -178,7 +224,11 @@ class Interpreter:
 
     @evaluate.register
     def _(self, expr: AssignExpr) -> Any:
-        value = self.evaluate(expr.value)
+        if expr.operator is None:
+            value = self.evaluate(expr.value)
+        else:
+            current = self._look_up_variable(expr.name, expr)
+            value = self._apply_binary(expr.operator, current, self.evaluate(expr.value))
         distance = self._locals.get(expr.id)
         if distance is not None:
             self.environment.assign_at(distance, expr.name, value)
@@ -205,6 +255,40 @@ class Interpreter:
                 f"Se esperaban {callee.arity()} argumentos pero se recibieron {len(arguments)}.",
             )
         return callee.call(self, arguments)
+
+    @evaluate.register
+    def _(self, expr: GetExpr) -> Any:
+        obj = self.evaluate(expr.object)
+        if isinstance(obj, LoxInstance):
+            return obj.get(expr.name)
+        raise LoxRuntimeError(expr.name, "Solo las instancias tienen propiedades.")
+
+    @evaluate.register
+    def _(self, expr: SetExpr) -> Any:
+        obj = self.evaluate(expr.object)
+        if not isinstance(obj, LoxInstance):
+            raise LoxRuntimeError(expr.name, "Solo las instancias tienen campos.")
+
+        if expr.operator is None:
+            value = self.evaluate(expr.value)
+        else:
+            value = self._apply_binary(expr.operator, obj.get(expr.name), self.evaluate(expr.value))
+        obj.set(expr.name, value)
+        return value
+
+    @evaluate.register
+    def _(self, expr: ThisExpr) -> Any:
+        return self._look_up_variable(expr.keyword, expr)
+
+    @evaluate.register
+    def _(self, expr: SuperExpr) -> Any:
+        distance = self._locals[expr.id]
+        superclass: LoxClass = self.environment.get_at(distance, "super")
+        instance = self.environment.get_at(distance - 1, "this")
+        method = superclass.find_method(expr.method.lexeme)
+        if method is None:
+            raise LoxRuntimeError(expr.method, f"Propiedad no definida '{expr.method.lexeme}'.")
+        return method.bind(instance)
 
     @evaluate.register
     def _(self, expr: LogicalExpr) -> Any:

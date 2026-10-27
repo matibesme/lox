@@ -11,3 +11,11 @@ class ReturnSignal(Exception):
     def __init__(self, value: Any) -> None:
         super().__init__()
         self.value = value
+
+
+class BreakSignal(Exception):
+    """Se lanza al ejecutar un `break` para salir del bucle mas cercano."""
+
+
+class ContinueSignal(Exception):
+    """Se lanza al ejecutar un `continue` para saltar a la siguiente vuelta del bucle."""

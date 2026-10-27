@@ -1,8 +1,18 @@
 from typing import Callable
 from lox.errors import ErrorReporter, ParseError
-from lox.statement import BlockStmt, ExpressionStmt, PrintStmt, Stmt, VarStmt, IfStmt, WhileStmt, FunctionStmt, ReturnStmt
+from lox.statement import BlockStmt, ExpressionStmt, PrintStmt, Stmt, VarStmt, IfStmt, WhileStmt, FunctionStmt, ReturnStmt, ClassStmt, BreakStmt, ContinueStmt
 from lox.tokens import Token, TokenKind
-from lox.expr import Expr, BinaryExpr, UnaryExpr, LiteralExpr, GroupingExpr, VariableExpr, AssignExpr, LogicalExpr, CallExpr
+from lox.expr import Expr, BinaryExpr, UnaryExpr, LiteralExpr, GroupingExpr, VariableExpr, AssignExpr, LogicalExpr, CallExpr, GetExpr, SetExpr, ThisExpr, SuperExpr
+
+
+# Operador compuesto -> operador binario que aplica (`a += b` hace `a + b`).
+_COMPOUND_OPERATORS: dict[TokenKind, TokenKind] = {
+    TokenKind.PLUS_EQUAL: TokenKind.PLUS,
+    TokenKind.MINUS_EQUAL: TokenKind.MINUS,
+    TokenKind.STAR_EQUAL: TokenKind.STAR,
+    TokenKind.SLASH_EQUAL: TokenKind.SLASH,
+    TokenKind.PERCENT_EQUAL: TokenKind.PERCENT,
+}
 
 
 class Parser:
@@ -23,6 +33,8 @@ class Parser:
 ## Statements rules
     def _declaration(self) -> Stmt | None:
         try:
+            if self._match(TokenKind.CLASS):
+                return self._class_declaration()
             if self._match(TokenKind.FUN):
                 return self._function_declaration("funcion")
             if self._match(TokenKind.VAR):
@@ -32,7 +44,22 @@ class Parser:
             self._skip_to_next_statement()
             return None
 
-    def _function_declaration(self, kind: str) -> Stmt:
+    def _class_declaration(self) -> Stmt:
+        name = self._consume(TokenKind.IDENTIFIER, "Se esperaba el nombre de la clase.")
+
+        superclass: VariableExpr | None = None
+        if self._match(TokenKind.LESS):
+            self._consume(TokenKind.IDENTIFIER, "Se esperaba el nombre de la superclase.")
+            superclass = VariableExpr(self._previous())
+
+        self._consume(TokenKind.LEFT_BRACE, "Se esperaba '{' antes del cuerpo de la clase.")
+        methods: list[FunctionStmt] = []
+        while not self._check_token(TokenKind.RIGHT_BRACE) and not self._is_end():
+            methods.append(self._function_declaration("metodo"))
+        self._consume(TokenKind.RIGHT_BRACE, "Se esperaba '}' despues del cuerpo de la clase.")
+        return ClassStmt(name, superclass, methods)
+
+    def _function_declaration(self, kind: str) -> FunctionStmt:
         name = self._consume(TokenKind.IDENTIFIER, f"Se esperaba el nombre de la {kind}.")
         self._consume(TokenKind.LEFT_PAREN, f"Se esperaba '(' despues del nombre de la {kind}.")
 
@@ -73,7 +100,16 @@ class Parser:
             return self._for_statement()
         if self._match(TokenKind.RETURN):
             return self._return_statement()
+        if self._match(TokenKind.BREAK):
+            return self._loop_jump_statement(BreakStmt, "break")
+        if self._match(TokenKind.CONTINUE):
+            return self._loop_jump_statement(ContinueStmt, "continue")
         return self._expression_statement()
+
+    def _loop_jump_statement(self, stmt_class: type[BreakStmt] | type[ContinueStmt], keyword: str) -> Stmt:
+        token = self._previous()
+        self._consume(TokenKind.SEMICOLON, f"Se esperaba ';' despues de '{keyword}'.")
+        return stmt_class(token)
 
     def _return_statement(self) -> Stmt:
         keyword = self._previous()
@@ -124,8 +160,7 @@ class Parser:
         return WhileStmt(condition, body)
     
     def _for_statement(self) -> Stmt:
-        # Azúcar sintáctico: descompone el for en un bloque que contiene
-        # la inicialización y un bucle while con la condición y el incremento.
+
         self._consume(TokenKind.LEFT_PAREN, "Se esperaba '(' despues de 'for'.")
 
         if self._match(TokenKind.SEMICOLON):
@@ -146,12 +181,10 @@ class Parser:
         self._consume(TokenKind.RIGHT_PAREN, "Se esperaba ')' despues del 'for'.")
 
         body = self._statement()
-        if increment is not None:
-            body = BlockStmt([body, ExpressionStmt(increment)])
 
         if condition is None:
             condition = LiteralExpr(True)
-        body = WhileStmt(condition, body)
+        body = WhileStmt(condition, body, increment)
 
         if start is not None:
             body = BlockStmt([start, body])
@@ -206,11 +239,17 @@ class Parser:
             return UnaryExpr(operator=operator, right=right)
         return self._call()
 
-# llamadas: nombre(args) o cualquier expresion que resuelva a una funcion, ej getFn()(3)
+# llamadas y acceso a propiedades: f(args), getFn()(3), obj.campo, obj.metodo()
     def _call(self) -> Expr:
         expr = self._primary()
-        while self._match(TokenKind.LEFT_PAREN):
-            expr = self._finish_call(expr)
+        while True:
+            if self._match(TokenKind.LEFT_PAREN):
+                expr = self._finish_call(expr)
+            elif self._match(TokenKind.DOT):
+                name = self._consume(TokenKind.IDENTIFIER, "Se esperaba el nombre de la propiedad despues de '.'.")
+                expr = GetExpr(expr, name)
+            else:
+                break
         return expr
 
     def _finish_call(self, callee: Expr) -> Expr:
@@ -239,6 +278,13 @@ class Parser:
             expr = self._expression()
             self._consume(TokenKind.RIGHT_PAREN, "Se esperaba cierre de parentesis.")
             return GroupingExpr(expr)
+        if self._match(TokenKind.THIS):
+            return ThisExpr(self._previous())
+        if self._match(TokenKind.SUPER):
+            keyword = self._previous()
+            self._consume(TokenKind.DOT, "Se esperaba '.' despues de 'super'.")
+            method = self._consume(TokenKind.IDENTIFIER, "Se esperaba el nombre del metodo de la superclase.")
+            return SuperExpr(keyword, method)
         if self._match(TokenKind.IDENTIFIER):
             return VariableExpr(self._previous())
         raise self._error(self._peek(), "Se esperaba una expresión.")
@@ -293,12 +339,18 @@ class Parser:
 
     def _assignment(self) -> Expr:
         expr = self._or()  
-        if self._match(TokenKind.EQUAL):
+        if self._match(TokenKind.EQUAL, *_COMPOUND_OPERATORS):
             equals = self._previous()
             value = self._assignment()
+
+            operator: Token | None = None
+            if equals.kind in _COMPOUND_OPERATORS:
+                operator = Token(_COMPOUND_OPERATORS[equals.kind], equals.lexeme[:-1], None, equals.line)
+
             if isinstance(expr, VariableExpr):
-                name = expr.name
-                return AssignExpr(name, value)
+                return AssignExpr(expr.name, value, operator)
+            if isinstance(expr, GetExpr):
+                return SetExpr(expr.object, expr.name, value, operator)
             raise self._error(equals, "Objetivo de asignacion invalido.")
         return expr
 
@@ -320,6 +372,8 @@ class Parser:
                     TokenKind.WHILE,
                     TokenKind.PRINT,
                     TokenKind.RETURN,
+                    TokenKind.BREAK,
+                    TokenKind.CONTINUE,
                 ):
                     return
                 self._next()

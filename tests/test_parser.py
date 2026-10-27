@@ -110,15 +110,15 @@ class TestControlDeFlujo(unittest.TestCase):
 
     def test_for_desazucara_en_bloque_con_while(self):
         # for (var i = 0; i < 3; i = i + 1) print i;
-        # debe quedar como: { var i = 0; while (i < 3) { print i; i = i + 1; } }
+        # debe quedar como: { var i = 0; while (i < 3) print i; } con el incremento
+        # `i = i + 1` guardado en el while (asi se ejecuta aun despues de un `continue`).
         (stmt,) = parse("for (var i = 0; i < 3; i = i + 1) print i;")
         self.assertIsInstance(stmt, BlockStmt)
         self.assertIsInstance(stmt.statements[0], VarStmt)
         while_stmt = stmt.statements[1]
         self.assertIsInstance(while_stmt, WhileStmt)
-        self.assertIsInstance(while_stmt.body, BlockStmt)
-        self.assertIsInstance(while_stmt.body.statements[0], PrintStmt)
-        self.assertIsInstance(while_stmt.body.statements[1], ExpressionStmt)
+        self.assertIsInstance(while_stmt.body, PrintStmt)
+        self.assertIsInstance(while_stmt.increment, AssignExpr)
 
     def test_for_sin_condicion_usa_true_literal(self):
         (stmt,) = parse("for (;;) print 1;")

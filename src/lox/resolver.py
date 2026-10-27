@@ -18,15 +18,22 @@ from lox.expr import (
     BinaryExpr,
     CallExpr,
     Expr,
+    GetExpr,
     GroupingExpr,
     LiteralExpr,
     LogicalExpr,
+    SetExpr,
+    SuperExpr,
+    ThisExpr,
     UnaryExpr,
     VariableExpr,
 )
 from lox.interpreter import Interpreter
 from lox.statement import (
     BlockStmt,
+    BreakStmt,
+    ClassStmt,
+    ContinueStmt,
     ExpressionStmt,
     FunctionStmt,
     IfStmt,
@@ -42,6 +49,14 @@ from lox.tokens import Token
 class _FunctionKind(Enum):
     NONE = auto()
     FUNCTION = auto()
+    METHOD = auto()
+    INITIALIZER = auto()
+
+
+class _ClassKind(Enum):
+    NONE = auto()
+    CLASS = auto()
+    SUBCLASS = auto()
 
 
 class Resolver:
@@ -50,6 +65,8 @@ class Resolver:
         self._reporter = reporter or ErrorReporter()
         self._scopes: list[dict[str, bool]] = []
         self._current_function = _FunctionKind.NONE
+        self._current_class = _ClassKind.NONE
+        self._loop_depth = 0
 
     def resolve(self, statements: list[Stmt]) -> None:
         for stmt in statements:
@@ -91,11 +108,24 @@ class Resolver:
     @_resolve.register
     def _(self, stmt: WhileStmt) -> None:
         self._resolve(stmt.condition)
+        self._loop_depth += 1
         self._resolve(stmt.body)
+        self._loop_depth -= 1
+        if stmt.increment is not None:
+            self._resolve(stmt.increment)
+
+    @_resolve.register
+    def _(self, stmt: BreakStmt) -> None:
+        if self._loop_depth == 0:
+            self._report(stmt.keyword, "No se puede usar 'break' fuera de un bucle.")
+
+    @_resolve.register
+    def _(self, stmt: ContinueStmt) -> None:
+        if self._loop_depth == 0:
+            self._report(stmt.keyword, "No se puede usar 'continue' fuera de un bucle.")
 
     @_resolve.register
     def _(self, stmt: FunctionStmt) -> None:
-        # declarar y definir el nombre antes del cuerpo permite la recursion.
         self._declare(stmt.name)
         self._define(stmt.name)
         self._resolve_function(stmt, _FunctionKind.FUNCTION)
@@ -105,7 +135,37 @@ class Resolver:
         if self._current_function is _FunctionKind.NONE:
             self._report(stmt.keyword, "No se puede retornar desde fuera de una funcion.")
         if stmt.value is not None:
+            if self._current_function is _FunctionKind.INITIALIZER:
+                self._report(stmt.keyword, "No se puede retornar un valor desde un inicializador.")
             self._resolve(stmt.value)
+
+    @_resolve.register
+    def _(self, stmt: ClassStmt) -> None:
+        enclosing_class = self._current_class
+        self._current_class = _ClassKind.CLASS
+
+        self._declare(stmt.name)
+        self._define(stmt.name)
+
+        if stmt.superclass is not None:
+            if stmt.superclass.name.lexeme == stmt.name.lexeme:
+                self._report(stmt.superclass.name, "Una clase no puede heredar de si misma.")
+            self._current_class = _ClassKind.SUBCLASS
+            self._resolve(stmt.superclass)
+            self._begin_scope()
+            self._scopes[-1]["super"] = True
+
+        self._begin_scope()
+        self._scopes[-1]["this"] = True
+        for method in stmt.methods:
+            kind = _FunctionKind.INITIALIZER if method.name.lexeme == "init" else _FunctionKind.METHOD
+            self._resolve_function(method, kind)
+        self._end_scope()
+
+        if stmt.superclass is not None:
+            self._end_scope()
+
+        self._current_class = enclosing_class
 
 ## Expresiones
     @_resolve.register
@@ -118,6 +178,30 @@ class Resolver:
     def _(self, expr: AssignExpr) -> None:
         self._resolve(expr.value)
         self._resolve_local(expr, expr.name)
+
+    @_resolve.register
+    def _(self, expr: GetExpr) -> None:
+        self._resolve(expr.object)
+
+    @_resolve.register
+    def _(self, expr: SetExpr) -> None:
+        self._resolve(expr.value)
+        self._resolve(expr.object)
+
+    @_resolve.register
+    def _(self, expr: ThisExpr) -> None:
+        if self._current_class is _ClassKind.NONE:
+            self._report(expr.keyword, "No se puede usar 'this' fuera de una clase.")
+            return
+        self._resolve_local(expr, expr.keyword)
+
+    @_resolve.register
+    def _(self, expr: SuperExpr) -> None:
+        if self._current_class is _ClassKind.NONE:
+            self._report(expr.keyword, "No se puede usar 'super' fuera de una clase.")
+        elif self._current_class is not _ClassKind.SUBCLASS:
+            self._report(expr.keyword, "No se puede usar 'super' en una clase sin superclase.")
+        self._resolve_local(expr, expr.keyword)
 
     @_resolve.register
     def _(self, expr: BinaryExpr) -> None:
@@ -151,6 +235,9 @@ class Resolver:
     def _resolve_function(self, stmt: FunctionStmt, kind: _FunctionKind) -> None:
         enclosing_function = self._current_function
         self._current_function = kind
+        # break/continue no pueden cruzar el limite de una funcion.
+        enclosing_loop_depth = self._loop_depth
+        self._loop_depth = 0
 
         self._begin_scope()
         for param in stmt.params:
@@ -160,6 +247,7 @@ class Resolver:
         self._end_scope()
 
         self._current_function = enclosing_function
+        self._loop_depth = enclosing_loop_depth
 
     def _begin_scope(self) -> None:
         self._scopes.append({})

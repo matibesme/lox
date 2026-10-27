@@ -1,7 +1,7 @@
 from abc import ABC
 from dataclasses import dataclass
 from typing import Any
-from lox.expr import Expr
+from lox.expr import Expr, VariableExpr
 from lox.tokens import Token
 
 
@@ -40,6 +40,7 @@ class IfStmt(Stmt):
 class WhileStmt(Stmt):
     condition: Expr
     body: Stmt
+    increment: Expr | None = None
 
 @dataclass(frozen=True,slots=True)
 class FunctionStmt(Stmt):
@@ -51,3 +52,17 @@ class FunctionStmt(Stmt):
 class ReturnStmt(Stmt):
     keyword: Token
     value: Expr | None
+
+@dataclass(frozen=True,slots=True)
+class ClassStmt(Stmt):
+    name: Token
+    superclass: VariableExpr | None
+    methods: list[FunctionStmt]
+
+@dataclass(frozen=True,slots=True)
+class BreakStmt(Stmt):
+    keyword: Token
+
+@dataclass(frozen=True,slots=True)
+class ContinueStmt(Stmt):
+    keyword: Token

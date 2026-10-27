@@ -53,6 +53,7 @@ class VariableExpr(Expr):
 class AssignExpr(Expr):
     name: Token
     value: Expr
+    operator: Token | None = None
 
 @dataclass(frozen=True, slots=True)
 class LogicalExpr(Expr):
@@ -72,3 +73,36 @@ class CallExpr(Expr):
     def __str__(self) -> str:
         args = ", ".join(str(arg) for arg in self.arguments)
         return f"{self.callee}({args})"
+
+@dataclass(frozen=True, slots=True)
+class GetExpr(Expr):
+    object: Expr
+    name: Token
+
+    def __str__(self) -> str:
+        return f"{self.object}.{self.name.lexeme}"
+
+@dataclass(frozen=True, slots=True)
+class SetExpr(Expr):
+    object: Expr
+    name: Token
+    value: Expr
+    operator: Token | None = None 
+    def __str__(self) -> str:
+        op = "=" if self.operator is None else f"{self.operator.lexeme}="
+        return f"({self.object}.{self.name.lexeme} {op} {self.value})"
+
+@dataclass(frozen=True, slots=True)
+class ThisExpr(Expr):
+    keyword: Token
+
+    def __str__(self) -> str:
+        return "this"
+
+@dataclass(frozen=True, slots=True)
+class SuperExpr(Expr):
+    keyword: Token
+    method: Token
+
+    def __str__(self) -> str:
+        return f"super.{self.method.lexeme}"
