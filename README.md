@@ -47,18 +47,20 @@ Corre tanto los tests de la cátedra como los nuestros.
 
 ---
 ## Benchmarks
+Comparamos el rendimiento de nuestra implementación de Lox contra Python y JavaScript en tres pruebas:
 
-Comparamos el rendimiento de nuestro intérprete contra Python y JavaScript (Node) en tres pruebas:
+| Benchmark                                    | Lox (s) | Python (s) | JavaScript (s) |
+| :------------------------------------------- | ------: | ---------: | -------------: |
+| **Fibonacci (recursivo, `fib(24)`)**         |   2.98s |      0.05s |          0.04s |
+| **Loop (bucle `while` de 200k iteraciones)** |   4.21s |      0.06s |          0.05s |
+| **Concatenación de strings (50k strings)**   |   1.22s |      0.07s |          0.05s |
 
-| Benchmark | Lox (s) | Python (s) | JavaScript (s) |
-| :--- | ---: | ---: | ---: |
-| **Fibonacci (recursivo, `fib(24)`)** | 2.98s | 0.05s | 0.04s |
-| **Loop (bucle `while` de 200k iteraciones)** | 4.21s | 0.06s | 0.05s |
-| **Concatenación de strings (50k strings)** | 1.22s | 0.07s | 0.05s |
+En estos benchmarks, Lox resulta aproximadamente entre **17x y 70x más lento que Python**, dependiendo de la prueba.
 
-Lox es entre **18x** y **72x** más lento que Python. Es lo esperado de un *tree-walk interpreter* puro (recorre el AST con dispatch dinámico y crea entornos en cada bloque/llamada) corriendo sobre el propio intérprete de Python. 
+Esta diferencia es entendible ya que es un *tree-walk interpreter* puro. Además, nuestra implementación está escrita en Python, por lo que cada operación de Lox implica también el costo adicional de ejecutar la lógica del intérprete sobre el runtime de Python.
 
-La brecha es menor en la concatenación de strings (donde el costo principal es alocar memoria, compartido por los tres) y mayor en bucles y recursión con operaciones chicas que Python y V8 compilan a bytecode/código máquina.
+La diferencia es especialmente grande en Fibonacci y en el loop, donde se realizan una gran cantidad de operaciones pequeñas que implican recorridos del AST y *dispatch* del intérprete. En la concatenación de strings, parte del trabajo corresponde a operaciones internas de manejo de strings, por lo que la diferencia resulta menor.
+
 
 Para tablas y gráficos de cada prueba, ver el [Reporte de benchmarks](benchmarks/report.md).
 
@@ -128,7 +130,22 @@ Acá dejamos de ser una calculadora que solo evalúa números y pasamos a un len
       finally:
           self.environment = previous
   ```
-- **Closures:** Cuando se define una función, esta se guarda una referencia al entorno donde nació (`closure`). Así, cuando la llamamos más adelante desde otro lugar, mantiene acceso a las variables del entorno donde fue definida, aunque ese bloque ya haya terminado.
+- **Funciones, Closures y enclosing:**
+  - **Al declararse:** la función guarda el entorno actual en el que fue creada como su `closure` (`LoxFunction(stmt, self.environment)`).
+  - **Al invocarse:** se crea un entorno local para sus parámetros cuyo padre (`enclosing`) es justamente ese closure:
+  ```python
+  def call(self, interpreter: Interpreter, arguments: list[Any]) -> Any:
+      environment = Environment(enclosing=self.closure)
+      for param, argument in zip(self.declaration.params, arguments):
+          environment.define(param.lexeme, argument)
+
+      try:
+          interpreter.run_block(self.declaration.body, environment)
+      except ReturnSignal as signal:
+          return signal.value
+      return None
+  ```
+  De esta forma, la resolución de variables sube por la cadena de `enclosing` hacia donde nació la función y no hacia donde se la llama.
 
 ### Resolver
 Análisis semántico: recorre el AST una sola vez antes de ejecutar para fijar el alcance léxico y detectar errores estáticos.
