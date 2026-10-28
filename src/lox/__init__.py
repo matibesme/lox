@@ -5,18 +5,19 @@ from __future__ import annotations
 import sys
 
 
-import readline  # noqa: F401  (mejora el prompt en Unix; no existe en Windows)
+import readline  
 
 
-from .errors import ErrorReporter
+from .errors import ErrorReporter, LoxError
 from .scanner import Scanner
 from .parser import Parser
 from .interpreter import Interpreter
 from .resolver import Resolver
 from .statement import ExpressionStmt, Stmt
+from .compiler import BytecodeCompiler
+from .vm import VM
 
-_STAGES = ("scanning", "parsing")
-
+_STAGES = ("scanning", "parsing", "compile", "disassemble")
 
 def _print_statement(stmt: Stmt) -> None:
     if isinstance(stmt, ExpressionStmt):
@@ -42,6 +43,18 @@ def _run(source: str, reporter: ErrorReporter, interpreter: Interpreter, stage: 
     if reporter.had_error:
         return
 
+    if stage in ("compile", "disassemble"):
+        try:
+            chunk = BytecodeCompiler().compile(statements)
+            if stage == "disassemble":
+                chunk.disassemble()
+                return
+            VM().execute(chunk)
+        except LoxError as error:
+            # CompileError y VMError llegan acá y se reportan como el resto
+            reporter.report(error)
+        return
+    
     Resolver(interpreter, reporter).resolve(statements)
     if reporter.had_error:
         return

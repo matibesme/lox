@@ -28,7 +28,7 @@ class ErrorReporter:
 
     def report(self, error: LoxError) -> None:
         print(str(error))
-        if isinstance(error, LoxRuntimeError):
+        if isinstance(error, (LoxRuntimeError, VMError)):
             self.had_runtime_error = True
         else:
             self.had_error = True
@@ -59,3 +59,17 @@ class ResolverError(LoxError):
     message: str
     def __str__(self) -> str:
         return f"[linea {self.token.line}] Error de resolucion en '{self.token.lexeme}': {self.message}"
+
+@dataclass
+class CompileError(LoxError):
+    line: int
+    message: str
+    def __str__(self) -> str:
+        return f"[linea {self.line}] Error de compilacion: {self.message}"
+
+@dataclass
+class VMError(LoxError):
+    line: int
+    message: str
+    def __str__(self) -> str:
+        return f"[linea {self.line}] Error en tiempo de ejecucion: {self.message}"
