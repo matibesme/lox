@@ -26,7 +26,7 @@ def _print_statement(stmt: Stmt) -> None:
         print(stmt)
 
 
-def _run(source: str, reporter: ErrorReporter, interpreter: Interpreter, stage: str | None = None) -> None:
+def _run(source: str, reporter: ErrorReporter, interpreter: Interpreter, stage: str | None = None, vm: VM | None = None) -> None:
     tokens = Scanner(source, reporter).scan_tokens()
     if stage == "scanning":
         for token in tokens:
@@ -49,7 +49,7 @@ def _run(source: str, reporter: ErrorReporter, interpreter: Interpreter, stage: 
             if stage == "disassemble":
                 chunk.disassemble()
                 return
-            VM().execute(chunk)
+            (vm or VM()).execute(chunk)
         except LoxError as error:
             # CompileError y VMError llegan acá y se reportan como el resto
             reporter.report(error)
@@ -66,7 +66,8 @@ def _run_file(path: str, stage: str | None) -> int:
         source = f.read()
     reporter = ErrorReporter()
     interpreter = Interpreter(reporter)
-    _run(source, reporter, interpreter, stage)
+    vm = VM()
+    _run(source, reporter, interpreter, stage, vm)
     if reporter.had_error:
         return 65
     if reporter.had_runtime_error:
@@ -77,13 +78,14 @@ def _run_file(path: str, stage: str | None) -> int:
 def _run_prompt(stage: str | None) -> int:
     reporter = ErrorReporter()
     interpreter = Interpreter(reporter)
+    vm = VM()
     while True:
         try:
             line = input("lox> ")
         except EOFError:
             print()
             break
-        _run(line, reporter, interpreter, stage)
+        _run(line, reporter, interpreter, stage, vm)
         reporter.reset()
     return 0
 
