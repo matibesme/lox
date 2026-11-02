@@ -5,11 +5,11 @@ from __future__ import annotations
 import unittest
 
 from lox_helpers import parse, parse_expression, run
-from lox.errors import ErrorReporter
-from lox.expr import AssignExpr, SetExpr
-from lox.scanner import Scanner
-from lox.statement import BreakStmt, ContinueStmt, WhileStmt
-from lox.tokens import TokenKind
+from lox.frontend.errors import ErrorReporter
+from lox.frontend.expr import AssignExpr, SetExpr
+from lox.frontend.scanner import Scanner
+from lox.frontend.statement import BreakStmt, ContinueStmt, WhileStmt
+from lox.frontend.tokens import TokenKind
 
 
 def _kinds(source: str) -> list[TokenKind]:

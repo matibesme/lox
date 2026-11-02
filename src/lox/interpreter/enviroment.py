@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any
-from lox.tokens import Token
-from lox.errors import LoxRuntimeError
+from lox.frontend.tokens import Token
+from lox.frontend.errors import LoxRuntimeError
 
 
 class Environment:

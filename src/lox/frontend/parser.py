@@ -1,8 +1,8 @@
 from typing import Callable
-from lox.errors import ErrorReporter, ParseError
-from lox.statement import BlockStmt, ExpressionStmt, PrintStmt, Stmt, VarStmt, IfStmt, WhileStmt, FunctionStmt, ReturnStmt, ClassStmt, BreakStmt, ContinueStmt
-from lox.tokens import Token, TokenKind
-from lox.expr import Expr, BinaryExpr, UnaryExpr, LiteralExpr, GroupingExpr, VariableExpr, AssignExpr, LogicalExpr, CallExpr, GetExpr, SetExpr, ThisExpr, SuperExpr
+from .errors import ErrorReporter, ParseError
+from .statement import BlockStmt, ExpressionStmt, PrintStmt, Stmt, VarStmt, IfStmt, WhileStmt, FunctionStmt, ReturnStmt, ClassStmt, BreakStmt, ContinueStmt
+from .tokens import Token, TokenKind
+from .expr import Expr, BinaryExpr, UnaryExpr, LiteralExpr, GroupingExpr, VariableExpr, AssignExpr, LogicalExpr, CallExpr, GetExpr, SetExpr, ThisExpr, SuperExpr
 
 
 # Operador compuesto -> operador binario que aplica (`a += b` hace `a + b`).

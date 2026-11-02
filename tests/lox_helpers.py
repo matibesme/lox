@@ -9,13 +9,10 @@ from dataclasses import dataclass
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from lox.errors import ErrorReporter
-from lox.expr import Expr
-from lox.interpreter import Interpreter
-from lox.parser import Parser
-from lox.resolver import Resolver
-from lox.scanner import Scanner
-from lox.statement import ExpressionStmt, Stmt
+from lox.frontend import ErrorReporter, Parser, Scanner
+from lox.frontend.expr import Expr
+from lox.frontend.statement import ExpressionStmt, Stmt
+from lox.interpreter import Interpreter, Resolver
 
 
 def parse(source: str, reporter: ErrorReporter | None = None) -> list[Stmt]:

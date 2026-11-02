@@ -5,9 +5,9 @@ from __future__ import annotations
 import unittest
 
 from lox_helpers import parse, parse_expression, run
-from lox.errors import ErrorReporter
-from lox.expr import CallExpr, GetExpr, SetExpr, SuperExpr, ThisExpr, VariableExpr
-from lox.statement import ClassStmt, FunctionStmt
+from lox.frontend.errors import ErrorReporter
+from lox.frontend.expr import CallExpr, GetExpr, SetExpr, SuperExpr, ThisExpr, VariableExpr
+from lox.frontend.statement import ClassStmt, FunctionStmt
 
 
 class TestParserClases(unittest.TestCase):

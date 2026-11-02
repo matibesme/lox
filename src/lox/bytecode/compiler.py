@@ -1,17 +1,17 @@
 from __future__ import annotations
 from functools import singledispatchmethod
-from lox.chunk import Chunk, OpCode
-from lox.errors import CompileError
-from lox.expr import (
+from .chunk import Chunk, OpCode
+from lox.frontend.errors import CompileError
+from lox.frontend.expr import (
     AssignExpr, BinaryExpr, Expr, GroupingExpr, LiteralExpr, LogicalExpr,
     UnaryExpr, VariableExpr,
 )
-from lox.statement import (
+from lox.frontend.statement import (
     BlockStmt, BreakStmt, ContinueStmt, ExpressionStmt, IfStmt, PrintStmt,
     Stmt, VarStmt, WhileStmt,
 )
-from lox.tokens import Token, TokenKind
-from lox.compiler_state import Local, Loop
+from lox.frontend.tokens import Token, TokenKind
+from .compiler_state import Local, Loop
 
 #Dejamos como tupla de opcodes para hacer desugaring de operadores 
 _BINARY_OPS: dict[TokenKind, tuple[OpCode, ...]] = {

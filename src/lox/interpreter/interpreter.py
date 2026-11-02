@@ -1,17 +1,43 @@
-from lox.statement import WhileStmt
-from lox.statement import IfStmt
-from lox.expr import LogicalExpr
-from typing import Any
-from lox.tokens import Token, TokenKind
-from lox.errors import LoxRuntimeError, ErrorReporter
 from functools import singledispatchmethod
-from lox.expr import BinaryExpr, Expr, GroupingExpr, LiteralExpr, UnaryExpr, AssignExpr, VariableExpr, CallExpr, GetExpr, SetExpr, ThisExpr, SuperExpr
-from lox.enviroment import Environment
-from lox.statement import Stmt, PrintStmt, ExpressionStmt, VarStmt, BlockStmt, FunctionStmt, ReturnStmt, ClassStmt, BreakStmt, ContinueStmt
-from lox.callable import LoxCallable
-from lox.functions import LoxFunction
-from lox.classes import LoxClass, LoxInstance
-from lox.signals import ReturnSignal, BreakSignal, ContinueSignal
+from typing import Any
+
+from lox.frontend.errors import ErrorReporter, LoxRuntimeError
+from lox.frontend.expr import (
+    AssignExpr,
+    BinaryExpr,
+    CallExpr,
+    Expr,
+    GetExpr,
+    GroupingExpr,
+    LiteralExpr,
+    LogicalExpr,
+    SetExpr,
+    SuperExpr,
+    ThisExpr,
+    UnaryExpr,
+    VariableExpr,
+)
+from lox.frontend.statement import (
+    BlockStmt,
+    BreakStmt,
+    ClassStmt,
+    ContinueStmt,
+    ExpressionStmt,
+    FunctionStmt,
+    IfStmt,
+    PrintStmt,
+    ReturnStmt,
+    Stmt,
+    VarStmt,
+    WhileStmt,
+)
+from lox.frontend.tokens import Token, TokenKind
+
+from .callable import LoxCallable
+from .classes import LoxClass, LoxInstance
+from .enviroment import Environment
+from .functions import LoxFunction
+from .signals import BreakSignal, ContinueSignal, ReturnSignal
 
 class Interpreter:
 

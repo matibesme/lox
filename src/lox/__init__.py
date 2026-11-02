@@ -8,14 +8,10 @@ import sys
 import readline  
 
 
-from .errors import ErrorReporter, LoxError
-from .scanner import Scanner
-from .parser import Parser
-from .interpreter import Interpreter
-from .resolver import Resolver
-from .statement import ExpressionStmt, Stmt
-from .compiler import BytecodeCompiler
-from .vm import VM
+from lox.frontend import ErrorReporter, LoxError, Parser, Scanner
+from lox.frontend.statement import ExpressionStmt, Stmt
+from lox.interpreter import Interpreter, Resolver
+from lox.bytecode import BytecodeCompiler, VM
 
 _STAGES = ("scanning", "parsing", "compile", "disassemble")
 

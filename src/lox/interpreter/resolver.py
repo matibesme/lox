@@ -12,8 +12,8 @@ from __future__ import annotations
 from enum import Enum, auto
 from functools import singledispatchmethod
 
-from lox.errors import ErrorReporter, ResolverError
-from lox.expr import (
+from lox.frontend.errors import ErrorReporter, ResolverError
+from lox.frontend.expr import (
     AssignExpr,
     BinaryExpr,
     CallExpr,
@@ -28,8 +28,8 @@ from lox.expr import (
     UnaryExpr,
     VariableExpr,
 )
-from lox.interpreter import Interpreter
-from lox.statement import (
+from .interpreter import Interpreter
+from lox.frontend.statement import (
     BlockStmt,
     BreakStmt,
     ClassStmt,
@@ -43,7 +43,7 @@ from lox.statement import (
     VarStmt,
     WhileStmt,
 )
-from lox.tokens import Token
+from lox.frontend.tokens import Token
 
 
 class _FunctionKind(Enum):

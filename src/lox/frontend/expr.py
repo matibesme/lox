@@ -1,4 +1,4 @@
-from lox.tokens import Token
+from .tokens import Token
 from dataclasses import dataclass, field
 from abc import ABC
 import itertools

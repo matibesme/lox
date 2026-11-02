@@ -1,8 +1,8 @@
 from abc import ABC
 from dataclasses import dataclass
 from typing import Any
-from lox.expr import Expr, VariableExpr
-from lox.tokens import Token
+from .expr import Expr, VariableExpr
+from .tokens import Token
 
 
 @dataclass(frozen=True)

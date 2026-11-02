@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING
 
-from lox.callable import LoxCallable
-from lox.enviroment import Environment
-from lox.signals import ReturnSignal
-from lox.statement import FunctionStmt
+from .callable import LoxCallable
+from .enviroment import Environment
+from .signals import ReturnSignal
+from lox.frontend.statement import FunctionStmt
 
 if TYPE_CHECKING:
-    from lox.classes import LoxInstance
-    from lox.interpreter import Interpreter
+    from .classes import LoxInstance
+    from .interpreter import Interpreter
 
 
 class LoxFunction(LoxCallable):

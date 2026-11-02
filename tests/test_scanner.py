@@ -9,9 +9,7 @@ import unittest
 # Permite correr los tests con `python -m unittest` sin instalar el paquete.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from lox.errors import ErrorReporter
-from lox.scanner import Scanner
-from lox.tokens import TokenKind
+from lox.frontend import ErrorReporter, Scanner, TokenKind
 
 
 def scan(source: str) -> list:

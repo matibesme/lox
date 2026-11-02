@@ -5,9 +5,9 @@ from __future__ import annotations
 import unittest
 
 from lox_helpers import parse, parse_expression
-from lox.errors import ErrorReporter
-from lox.expr import AssignExpr, BinaryExpr, CallExpr, LiteralExpr, LogicalExpr, UnaryExpr, VariableExpr
-from lox.statement import (
+from lox.frontend.errors import ErrorReporter
+from lox.frontend.expr import AssignExpr, BinaryExpr, CallExpr, LiteralExpr, LogicalExpr, UnaryExpr, VariableExpr
+from lox.frontend.statement import (
     BlockStmt,
     ExpressionStmt,
     FunctionStmt,
@@ -17,7 +17,7 @@ from lox.statement import (
     VarStmt,
     WhileStmt,
 )
-from lox.tokens import TokenKind
+from lox.frontend.tokens import TokenKind
 
 
 class TestPrecedencia(unittest.TestCase):
