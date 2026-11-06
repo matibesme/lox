@@ -2,6 +2,10 @@ from __future__ import annotations
 from typing import Any
 from .chunk import Chunk, OpCode
 from lox.frontend.errors import VMError
+from .functions import CallFrame, Closure, Function, Upvalue
+
+# Limitacion de implementacion
+FRAMES_MAX = 10_000
 
 
 # Respetamos contrato del lenguaje
@@ -26,17 +30,41 @@ class VM:
         self.stack: list[Any] = []
         # guarda los valores de las variables globales. Se resuelven en runtime (late-bound) porque el compilador no puede saber si una global va a existir cuando se ejecute esa linea.
         self.globals: dict[str, Any] = {}
+        # upvalues que todavia apuntan a una variable viva del stack
+        self.open_upvalues: dict[int, Upvalue] = {}
+
+    # Devuelve el upvalue de la variable que esta en esa posicion del stack
+    def capture_upvalue(self, index: int) -> Upvalue:
+        upvalue = self.open_upvalues.get(index)
+        if upvalue is None:
+            upvalue = Upvalue(index)
+            self.open_upvalues[index] = upvalue
+        return upvalue
+
+    # Cierra todos los upvalues abiertos de esa posicion del stack para arriba y los copia a closed
+    def close_upvalues(self, last: int) -> None:
+        for index in [i for i in self.open_upvalues if i >= last]:
+            upvalue = self.open_upvalues.pop(index)
+            upvalue.closed = self.stack[index]
+            upvalue.is_open = False
 
     def execute(self, chunk: Chunk) -> None:
-        code, consts, stack = chunk.code, chunk.consts, self.stack
+        stack = self.stack
         globals_ = self.globals
         # empezamos con stack vacia por si hay  un error en ejecucion anterior
         stack.clear()
+        self.open_upvalues.clear()
+        script = Function(None)
+        script.chunk = chunk
+        stack.append(Closure(script))
+        frames = [CallFrame(stack[0], 0)]
+        frame = frames[0]
+        code, consts, base = chunk.code, chunk.consts, 0
         # instruction pointer, indice de proxima instruccion a ejecutar en code
         ip = 0
 
         def fail(msg: str) -> VMError:
-            return VMError(chunk.lines[ip - 1], msg)
+            return VMError(frame.closure.function.chunk.lines[ip - 1], msg)
 
         # el compilador no sabe si los operandos son numeros o strings, entonces chequeamos en tiempo de ejecucion.
         def numbers(a: Any, b: Any) -> None:
@@ -144,12 +172,13 @@ class VM:
 
                 # variables locales, operando es la posicion exacta del valor de la variable en el stack, que ya calculo el compilador. 
                 # Copia el valor de la variable local al tope del stack.
+                # (con funciones base + slot)
                 case OpCode.OP_GET_LOCAL:
-                    stack.append(stack[code[ip]])
+                    stack.append(stack[base + code[ip]])
                     ip += 1
                 # Pisa el indice del stack con el valor del tope. 
                 case OpCode.OP_SET_LOCAL:
-                    stack[code[ip]] = stack[-1]
+                    stack[base + code[ip]] = stack[-1]
                     ip += 1
 
                 # Salta siempre. Lo usa el if para saltear el else, `or` para
@@ -172,7 +201,68 @@ class VM:
                     ip += 2
                     ip -= offset
 
+                # ---- funciones y closures ----
+
+                # Convierte la funcion del pool en un closure
+                case OpCode.OP_CLOSURE:
+                    function = consts[code[ip]]
+                    ip += 1
+                    closure = Closure(function)
+                    for _ in range(function.upvalue_count):
+                        is_local, index = code[ip], code[ip + 1]
+                        ip += 2
+                        if is_local:
+                            closure.upvalues.append(self.capture_upvalue(base + index))
+                        else:
+                            closure.upvalues.append(frame.closure.upvalues[index])
+                    stack.append(closure)
+
+                case OpCode.OP_CALL:
+                    argc = code[ip]
+                    ip += 1
+                    callee = stack[-1 - argc]
+                    if not isinstance(callee, Closure):
+                        raise fail("Solo se pueden invocar funciones y clases.")
+                    if argc != callee.function.arity:
+                        raise fail(f"Se esperaban {callee.function.arity} argumentos pero se recibieron {argc}.")
+                    if len(frames) >= FRAMES_MAX:
+                        raise fail("Desbordamiento de pila: demasiadas llamadas anidadas.")
+                    frame.ip = ip
+                    frame = CallFrame(callee, len(stack) - argc - 1)
+                    frames.append(frame)
+                    code = callee.function.chunk.code
+                    consts = callee.function.chunk.consts
+                    base = frame.base
+                    ip = 0
+
+                case OpCode.OP_GET_UPVALUE:
+                    upvalue = frame.closure.upvalues[code[ip]]
+                    ip += 1
+                    stack.append(stack[upvalue.index] if upvalue.is_open else upvalue.closed)
+                case OpCode.OP_SET_UPVALUE:
+                    upvalue = frame.closure.upvalues[code[ip]]
+                    ip += 1
+                    if upvalue.is_open:
+                        stack[upvalue.index] = stack[-1]
+                    else:
+                        upvalue.closed = stack[-1]
+
+                case OpCode.OP_CLOSE_UPVALUE:
+                    self.close_upvalues(len(stack) - 1)
+                    stack.pop()
+
                 case OpCode.OP_RETURN:
-                    return
+                    result = stack.pop()
+                    self.close_upvalues(base)
+                    frames.pop()
+                    del stack[base:]
+                    if not frames:
+                        return
+                    stack.append(result)
+                    frame = frames[-1]
+                    code = frame.closure.function.chunk.code
+                    consts = frame.closure.function.chunk.consts
+                    base = frame.base
+                    ip = frame.ip
                 case _:
                     raise fail(f"Opcode desconocido: {op}")

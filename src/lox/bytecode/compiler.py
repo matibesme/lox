@@ -3,15 +3,16 @@ from functools import singledispatchmethod
 from .chunk import Chunk, OpCode
 from lox.frontend.errors import CompileError
 from lox.frontend.expr import (
-    AssignExpr, BinaryExpr, Expr, GroupingExpr, LiteralExpr, LogicalExpr,
+    AssignExpr, BinaryExpr, CallExpr, Expr, GroupingExpr, LiteralExpr, LogicalExpr,
     UnaryExpr, VariableExpr,
 )
 from lox.frontend.statement import (
-    BlockStmt, BreakStmt, ContinueStmt, ExpressionStmt, IfStmt, PrintStmt,
-    Stmt, VarStmt, WhileStmt,
+    BlockStmt, BreakStmt, ContinueStmt, ExpressionStmt, FunctionStmt, IfStmt, PrintStmt,
+    ReturnStmt, Stmt, VarStmt, WhileStmt,
 )
 from lox.frontend.tokens import Token, TokenKind
-from .compiler_state import Local, Loop
+from .compiler_state import Local, Loop, UpvalueRef
+from .functions.function import Function
 
 #Dejamos como tupla de opcodes para hacer desugaring de operadores 
 _BINARY_OPS: dict[TokenKind, tuple[OpCode, ...]] = {
@@ -35,17 +36,24 @@ _BINARY_OPS: dict[TokenKind, tuple[OpCode, ...]] = {
 class BytecodeCompiler:
     #Recorre el AST (post-order, primero compilando hijos para que las operaciones tengan sus operandos en el stack.) 
     # y emite bytecode en formato lineal.
-    def __init__(self) -> None:
-        self.chunk = Chunk()
+    def __init__(self, enclosing: BytecodeCompiler | None = None, function: Function | None = None) -> None:
+        
+        self.enclosing = enclosing
+        # si estamos en main es una funcion mas con none
+        self.function = function if function is not None else Function(None)
+        self.chunk = self.function.chunk
         self.line = 1
         # simula el stack de la VM con cant de variables locales y su orden
         self.locals: list[Local] = []
+        self.locals.append(Local("", 0))
         # profundidad de bloque vemos si es local o global
         self.scope_depth = 0
         # lista de bucles abiertos para poder compilar break/continue
         self.loops: list[Loop] = []
         # nombre de global -> indice en el pool
         self.name_consts: dict[str, int] = {}
+        # lista de upvalues de la funcion
+        self.upvalues: list[UpvalueRef] = []
 
     
     def compile(self, statements: list[Stmt]) -> Chunk:
@@ -53,6 +61,7 @@ class BytecodeCompiler:
             self.gen_stmt(stmt)
 
         # op return al final del programa para que la VM sepa que termino.
+        self.emit(OpCode.OP_NIL)
         self.emit(OpCode.OP_RETURN)
         return self.chunk
 
@@ -116,7 +125,11 @@ class BytecodeCompiler:
     def end_scope(self) -> None:
         self.scope_depth -= 1
         while self.locals and self.locals[-1].depth > self.scope_depth:
-            self.emit(OpCode.OP_POP)
+            # guardamos en upvalue si alguna funcion uso esta varible
+            if self.locals[-1].is_captured:
+                self.emit(OpCode.OP_CLOSE_UPVALUE)
+            else:
+                self.emit(OpCode.OP_POP)
             self.locals.pop()
 
     # guarda una variable local en el stack simulado
@@ -143,20 +156,55 @@ class BytecodeCompiler:
                 return slot
         return -1
 
-    # escriben operando para leer o escribir una variable local o global
+    # Busca el nombre en las funciones de afuera (variables que no son locales de esta funcion pero tampoco globales)
+    # Devuelve el indice del upvalue en self.upvalues, o -1 si no esta en ninguna(ahi seria global)
+    def resolve_upvalue(self, name: Token) -> int:
+        if self.enclosing is None:
+            return -1
+        slot = self.enclosing.resolve_local(name)
+        if slot != -1:
+            # si la encontramos, la marcamos como capturada
+            self.enclosing.locals[slot].is_captured = True
+            return self.add_upvalue(slot, True)
+        # si esta mas afuera todavia, es un upvalue de la funcion contenedora
+        upvalue = self.enclosing.resolve_upvalue(name)
+        if upvalue != -1:
+            return self.add_upvalue(upvalue, False)
+        return -1
+
+    # Registra un upvalue y devuelve su indice. Si ya lo habiamos registrado, reutiliza el indice
+    def add_upvalue(self, index: int, is_local: bool) -> int:
+        for i, existing in enumerate(self.upvalues):
+            if existing.index == index and existing.is_local == is_local:
+                return i
+        if len(self.upvalues) >= 256:
+            raise CompileError(self.line, "Demasiadas variables capturadas en una funcion.")
+        self.upvalues.append(UpvalueRef(index, is_local))
+        return len(self.upvalues) - 1
+
+    # escriben operando para leer o escribir una variable local, upvalue o global
+    # busqueda primero lo propio, despues lo de funciones de afuera, al final globales.
     def emit_get(self, name: Token) -> None:
         slot = self.resolve_local(name)
         if slot != -1:
             self.emit(OpCode.OP_GET_LOCAL, slot)
         else:
-            self.emit(OpCode.OP_GET_GLOBAL, self.name_const(name.lexeme))
+            upvalue = self.resolve_upvalue(name)
+            if upvalue != -1:
+                self.emit(OpCode.OP_GET_UPVALUE, upvalue)
+            else:
+                self.emit(OpCode.OP_GET_GLOBAL, self.name_const(name.lexeme))
 
     def emit_set(self, name: Token) -> None:
         slot = self.resolve_local(name)
         if slot != -1:
             self.emit(OpCode.OP_SET_LOCAL, slot)
         else:
-            self.emit(OpCode.OP_SET_GLOBAL, self.name_const(name.lexeme))
+            upvalue = self.resolve_upvalue(name)
+            if upvalue != -1:
+                self.emit(OpCode.OP_SET_UPVALUE, upvalue)
+            else:
+                self.emit(OpCode.OP_SET_GLOBAL, self.name_const(name.lexeme))
 
   # Cuando se sale de un bucle, hay que descartar todas las locales que se declararon dentro del bucle.
     def leave_loop_scope(self, keyword: Token, name: str) -> Loop:
@@ -164,9 +212,34 @@ class BytecodeCompiler:
         if not self.loops:
             raise CompileError(keyword.line, f"No se puede usar '{name}' fuera de un bucle.")
         loop = self.loops[-1]
-        for _ in self.locals[loop.locals_at_entry:]:
-            self.emit(OpCode.OP_POP)
+        # Cerramos upvalues de las locales que se descartan, o hacemos OP_POP si no son capturadas.
+        for local in reversed(self.locals[loop.locals_at_entry:]):
+            self.emit(OpCode.OP_CLOSE_UPVALUE if local.is_captured else OpCode.OP_POP)
         return loop
+
+    # compila en un chunk nuevo y al terminar se vuelve a este compilador
+    def compile_function(self, stmt: FunctionStmt) -> None:
+        function = Function(stmt.name.lexeme)
+        function.arity = len(stmt.params)
+        sub = BytecodeCompiler(enclosing=self, function=function)
+        sub.line = stmt.name.line
+        sub.begin_scope()
+        for param in stmt.params:
+            sub.declare_local(param)
+            sub.locals[-1].depth = sub.scope_depth
+        for inner in stmt.body:
+            sub.gen_stmt(inner)
+        sub.emit(OpCode.OP_NIL)
+        sub.emit(OpCode.OP_RETURN)
+        function.upvalue_count = len(sub.upvalues)
+
+        idx = self.chunk.add_const(function)
+        if idx > 255:
+            raise CompileError(self.line, "Demasiadas constantes en un chunk.")
+        self.emit(OpCode.OP_CLOSURE, idx)
+    
+        for upvalue in sub.upvalues:
+            self.emit(1 if upvalue.is_local else 0, upvalue.index)
 
     # statements deja el stack como estaba
     @singledispatchmethod
@@ -269,6 +342,29 @@ class BytecodeCompiler:
         loop = self.leave_loop_scope(stmt.keyword, "continue")
         loop.continue_jumps.append(self.emit_jump(OpCode.OP_JUMP))
 
+    @gen_stmt.register
+    def _(self, stmt: FunctionStmt) -> None:
+        self.line = stmt.name.line
+        is_local = self.scope_depth > 0
+        if is_local:
+            self.declare_local(stmt.name)
+            self.locals[-1].depth = self.scope_depth
+        self.compile_function(stmt)
+        if not is_local:
+            self.emit(OpCode.OP_DEFINE_GLOBAL, self.name_const(stmt.name.lexeme))
+
+    @gen_stmt.register
+    def _(self, stmt: ReturnStmt) -> None:
+        self.line = stmt.keyword.line
+        # en main no hay funcion que retorne
+        if self.enclosing is None:
+            raise CompileError(stmt.keyword.line, "No se puede retornar desde fuera de una funcion.")
+        if stmt.value is None:
+            self.emit(OpCode.OP_NIL)
+        else:
+            self.gen_expr(stmt.value)
+        self.emit(OpCode.OP_RETURN)
+
     # expresiones: dejan un valor en el stack (+1)
     @singledispatchmethod
     def gen_expr(self, expr: Expr) -> None:
@@ -351,3 +447,15 @@ class BytecodeCompiler:
             self.emit(OpCode.OP_POP)
             self.gen_expr(expr.right)
             self.patch_jump(end_jump)
+
+
+    @gen_expr.register
+    def _(self, expr: CallExpr) -> None:
+        self.gen_expr(expr.callee)
+        for argument in expr.arguments:
+            self.gen_expr(argument)
+        self.line = expr.paren.line
+        # el operando mide 1 byte (el parser ya rechaza mas de 255 argumentos, esto es por las dudas)
+        if len(expr.arguments) > 255:
+            raise CompileError(self.line, "No se pueden tener mas de 255 argumentos.")
+        self.emit(OpCode.OP_CALL, len(expr.arguments))

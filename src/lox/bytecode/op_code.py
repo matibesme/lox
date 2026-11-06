@@ -37,6 +37,18 @@ class OpCode(IntEnum):
     OP_JUMP_IF_FALSE = auto()  # efecto 0, si el tope es falsey, salta
     OP_LOOP = auto()        # efecto 0, salta hacia atras (para bucles)
 
+    # funciones y closures
+    #operando es el indice en el pool de constantes donde esta la funcion
+    OP_CLOSURE = auto()       
+
+    # operando cantidad de argumentos
+    OP_CALL = auto()           
+
+    # variable local de una funcion EXTERNA que esta funcion usa, operando es indice en closure.upvalues
+    OP_GET_UPVALUE = auto()    
+    OP_SET_UPVALUE = auto()    
+    OP_CLOSE_UPVALUE = auto()  
+
     OP_PRINT = auto()   # saca el tope y lo muestra (efecto -1)
     OP_POP = auto()     # descarta el tope: es el ';' de un expression statement
     OP_RETURN = auto()  # fin del programa

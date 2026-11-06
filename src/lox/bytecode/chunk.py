@@ -24,6 +24,13 @@ WITH_JUMP_OPERAND = {
     OpCode.OP_LOOP,
 }
 
+
+WITH_BYTE_OPERAND = {
+    OpCode.OP_CALL,
+    OpCode.OP_GET_UPVALUE, 
+    OpCode.OP_SET_UPVALUE,
+}
+
 class Chunk:
     """Representacion intermedia en bytecode: instrucciones + pool de constantes."""
     def __init__(self) -> None:
@@ -47,7 +54,9 @@ class Chunk:
         return len(self.consts) - 1
 
     # pasa tira de bytes a texto para debuggear
-    def disassemble(self) -> None:
+    def disassemble(self, name: str = "script") -> None:
+        from .functions.function import Function
+        print(f"== {name} ==")
         i = 0
         while i < len(self.code):
             op = OpCode(self.code[i])
@@ -63,7 +72,24 @@ class Chunk:
                 target = i + 3 - offset if op == OpCode.OP_LOOP else i + 3 + offset
                 print(f"{i:04d}  {op.name:<16} -> {target:04d}")
                 i += 3  #salta el opcode y 2 bytes de operando
+            elif op in WITH_BYTE_OPERAND:
+                print(f"{i:04d}  {op.name:<16} {self.code[i + 1]}")
+                i += 2
+            elif op == OpCode.OP_CLOSURE:
+                idx = self.code[i + 1]
+                function = self.consts[idx]
+                print(f"{i:04d}  {op.name:<16} {idx}  ({function!r})")
+                i += 2
+                for _ in range(function.upvalue_count):
+                    is_local, index = self.code[i], self.code[i + 1]
+                    print(f"{i:04d}  |                  {'local' if is_local else 'upvalue'} {index}")
+                    i += 2
             else:
                 print(f"{i:04d}  {op.name}")
                 i += 1
         print(f"consts: {self.consts}")
+# dissamble any function that is in the pool of constants
+        for const in self.consts:
+            if isinstance(const, Function):
+                print()
+                const.chunk.disassemble(const.name)
