@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -60,6 +61,22 @@ class TestSinBandera(unittest.TestCase):
         salida = run_stage('print "hola";', None)
         self.assertEqual(salida.strip(), "hola")
 
+    def test_ejecucion_por_defecto_usa_compilador(self):
+        # El compilador aun no soporta clases, por lo que debe reportar error de compilacion
+        salida = run_stage('class Foo {}', None)
+        self.assertIn("Error de compilacion", salida)
+
+
+class TestBanderaInterpreter(unittest.TestCase):
+    def test_ejecuta_normalmente(self):
+        salida = run_stage('print "hola";', "interpreter")
+        self.assertEqual(salida.strip(), "hola")
+
+    def test_no_pasa_por_compilacion(self):
+        # Las clases si estan soportadas en el interprete clasico
+        salida = run_stage('class Foo {} print "clase ok";', "interpreter")
+        self.assertEqual(salida.strip(), "clase ok")
+
 
 class TestParseoDeArgumentos(unittest.TestCase):
     def test_bandera_desconocida_sale_con_codigo_64(self):
@@ -70,6 +87,11 @@ class TestParseoDeArgumentos(unittest.TestCase):
     def test_bandera_valida_y_script(self):
         stage, script = lox._parse_args(["--scanning", "script.lox"])
         self.assertEqual(stage, "scanning")
+        self.assertEqual(script, "script.lox")
+
+    def test_bandera_interpreter(self):
+        stage, script = lox._parse_args(["--interpreter", "script.lox"])
+        self.assertEqual(stage, "interpreter")
         self.assertEqual(script, "script.lox")
 
     def test_sin_argumentos(self):

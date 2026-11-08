@@ -13,7 +13,7 @@ from lox.frontend.statement import ExpressionStmt, Stmt
 from lox.interpreter import Interpreter, Resolver
 from lox.bytecode import BytecodeCompiler, VM
 
-_STAGES = ("scanning", "parsing", "compile", "disassemble")
+_STAGES = ("scanning", "parsing", "disassemble", "interpreter")
 
 def _print_statement(stmt: Stmt) -> None:
     if isinstance(stmt, ExpressionStmt):
@@ -39,22 +39,27 @@ def _run(source: str, reporter: ErrorReporter, interpreter: Interpreter, stage: 
     if reporter.had_error:
         return
 
-    if stage in ("compile", "disassemble"):
+    if stage == "interpreter":
+        Resolver(interpreter, reporter).resolve(statements)
+        if reporter.had_error:
+            return
+        interpreter.interpret(statements)
+        return
+
+    if stage == "disassemble":
         try:
             chunk = BytecodeCompiler().compile(statements)
-            if stage == "disassemble":
-                chunk.disassemble()
-                return
-            (vm or VM()).execute(chunk)
+            chunk.disassemble()
         except LoxError as error:
-            # CompileError y VMError llegan acá y se reportan como el resto
             reporter.report(error)
         return
-    
-    Resolver(interpreter, reporter).resolve(statements)
-    if reporter.had_error:
-        return
-    interpreter.interpret(statements)
+
+    try:
+        chunk = BytecodeCompiler().compile(statements)
+        (vm or VM()).execute(chunk)
+    except LoxError as error:
+        # CompileError y VMError llegan acá y se reportan como el resto
+        reporter.report(error)
 
 
 def _run_file(path: str, stage: str | None) -> int:
@@ -90,20 +95,20 @@ def _run_prompt(stage: str | None) -> int:
 
 
 def _parse_args(args: list[str]) -> tuple[str | None, str | None]:
-    """Separa la bandera de fase (--scanning/--parsing) del path del script."""
+    """Separa la bandera de fase (--scanning/--parsing/etc.) del path del script."""
     stage: str | None = None
     script: str | None = None
     for arg in args:
         if arg.startswith("--"):
             name = arg[2:]
             if name not in _STAGES:
-                print(f"Uso: lox [--scanning|--parsing] [script]")
+                print(f"Uso: lox [{'|'.join(f'--{s}' for s in _STAGES)}] [script]")
                 raise SystemExit(64)
             stage = name
         elif script is None:
             script = arg
         else:
-            print("Uso: lox [--scanning|--parsing] [script]")
+            print(f"Uso: lox [{'|'.join(f'--{s}' for s in _STAGES)}] [script]")
             raise SystemExit(64)
     return stage, script
 
