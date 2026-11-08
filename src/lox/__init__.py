@@ -78,10 +78,13 @@ def _run_prompt(stage: str | None) -> int:
     while True:
         try:
             line = input("lox> ")
-        except EOFError:
+        except (EOFError, KeyboardInterrupt):
             print()
             break
-        _run(line, reporter, interpreter, stage, vm)
+        try:
+            _run(line, reporter, interpreter, stage, vm)
+        except KeyboardInterrupt:
+            print()
         reporter.reset()
     return 0
 
@@ -106,7 +109,11 @@ def _parse_args(args: list[str]) -> tuple[str | None, str | None]:
 
 
 def main() -> None:
-    stage, script = _parse_args(sys.argv[1:])
-    if script is not None:
-        raise SystemExit(_run_file(script, stage))
-    raise SystemExit(_run_prompt(stage))
+    try:
+        stage, script = _parse_args(sys.argv[1:])
+        if script is not None:
+            raise SystemExit(_run_file(script, stage))
+        raise SystemExit(_run_prompt(stage))
+    except KeyboardInterrupt:
+        print()
+        raise SystemExit(130)
