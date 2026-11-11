@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import unittest
 
-from lox_helpers import run
+from lox_helpers import for_each_backend, run
 
 
+@for_each_backend
 class TestErroresDeResolucion(unittest.TestCase):
     def test_leer_variable_local_en_su_propio_inicializador(self):
         resultado = run("var a = 1; { var a = a; }")
@@ -30,6 +31,7 @@ class TestErroresDeResolucion(unittest.TestCase):
         self.assertFalse(resultado.reporter.had_error)
 
 
+@for_each_backend
 class TestScopeEstatico(unittest.TestCase):
     def test_closure_resuelve_contra_el_scope_de_declaracion(self):
         # Ejemplo clasico: la funcion debe seguir viendo la 'a' global aunque

@@ -1,5 +1,6 @@
 """Corre los tests oficiales de la catedra (tests/catedra/real-tests, bajados de
-https://github.com/FdelMazo/plox/tree/main/real-tests) contra nuestro interprete.
+https://github.com/FdelMazo/plox/tree/main/real-tests) contra nuestros dos backends
+(tree-walk interpreter y VM de bytecode).
 
 Los .lox de esa carpeta no se tocan: son los archivos originales de la catedra.
 El criterio de exito es el mismo que usa su script.py: correr cada archivo y
@@ -12,7 +13,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from lox_helpers import run
+from lox_helpers import for_each_backend, run
 
 _REAL_TESTS_DIR = Path(__file__).parent / "catedra" / "real-tests"
 
@@ -38,6 +39,8 @@ def _make_test(path: Path):
 
 for _path in _cases():
     setattr(TestCatedra, f"test_{_path.stem.replace('-', '_')}", _make_test(_path))
+
+for_each_backend(TestCatedra)
 
 
 if __name__ == "__main__":

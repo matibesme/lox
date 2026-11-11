@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from lox_helpers import parse, parse_expression, run
+from lox_helpers import for_each_backend, parse, parse_expression, run
 from lox.frontend.errors import ErrorReporter
 from lox.frontend.expr import AssignExpr, SetExpr
 from lox.frontend.scanner import Scanner
@@ -77,6 +77,7 @@ class TestParserExtras(unittest.TestCase):
         self.assertTrue(reporter.had_error)
 
 
+@for_each_backend
 class TestAsignacionCompuesta(unittest.TestCase):
     def test_todos_los_operadores(self):
         source = """
@@ -155,6 +156,7 @@ class TestAsignacionCompuesta(unittest.TestCase):
         self.assertIn("Propiedad no definida 'x'", resultado.output)
 
 
+@for_each_backend
 class TestBreakContinue(unittest.TestCase):
     def test_break_en_while(self):
         source = """

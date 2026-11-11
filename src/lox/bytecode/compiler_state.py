@@ -20,6 +20,13 @@ class UpvalueRef:
     is_local: bool
 
 
+# Clase que se esta compilando. Se apilan para clases anidadas y sirven para
+# validar this y super.
+@dataclass
+class ClassInfo:
+    has_superclass: bool = False
+
+
 # para poder compilar los break y continue, el compilador necesita recordar donde se declaro el bucle y que locales habia en ese momento.
 @dataclass
 class Loop:

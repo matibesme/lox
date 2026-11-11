@@ -3,15 +3,15 @@ from functools import singledispatchmethod
 from .chunk import Chunk, OpCode
 from lox.frontend.errors import CompileError
 from lox.frontend.expr import (
-    AssignExpr, BinaryExpr, CallExpr, Expr, GroupingExpr, LiteralExpr, LogicalExpr,
-    UnaryExpr, VariableExpr,
+    AssignExpr, BinaryExpr, CallExpr, Expr, GetExpr, GroupingExpr, LiteralExpr, LogicalExpr,
+    SetExpr, SuperExpr, ThisExpr, UnaryExpr, VariableExpr,
 )
 from lox.frontend.statement import (
-    BlockStmt, BreakStmt, ContinueStmt, ExpressionStmt, FunctionStmt, IfStmt, PrintStmt,
+    BlockStmt, BreakStmt, ClassStmt, ContinueStmt, ExpressionStmt, FunctionStmt, IfStmt, PrintStmt,
     ReturnStmt, Stmt, VarStmt, WhileStmt,
 )
 from lox.frontend.tokens import Token, TokenKind
-from .compiler_state import Local, Loop, UpvalueRef
+from .compiler_state import ClassInfo, Local, Loop, UpvalueRef
 from .functions.function import Function
 
 #Dejamos como tupla de opcodes para hacer desugaring de operadores 
@@ -29,6 +29,13 @@ _BINARY_OPS: dict[TokenKind, tuple[OpCode, ...]] = {
     TokenKind.LESS_EQUAL: (OpCode.OP_GREATER, OpCode.OP_NOT),
 }
 
+# Tipos de funcion que se pueden estar compilando. Cambian que hay en el slot 0
+# y que devuelve la funcion al terminar.
+SCRIPT = "script"
+FUNCTION = "function"
+METHOD = "method"
+INITIALIZER = "initializer"
+
 # stack effect
 #   -  las expresiones dejan exactamente 1 valor en el stack  
 #   -   todo STATEMENT deja el stack como estaba   
@@ -36,16 +43,21 @@ _BINARY_OPS: dict[TokenKind, tuple[OpCode, ...]] = {
 class BytecodeCompiler:
     #Recorre el AST (post-order, primero compilando hijos para que las operaciones tengan sus operandos en el stack.) 
     # y emite bytecode en formato lineal.
-    def __init__(self, enclosing: BytecodeCompiler | None = None, function: Function | None = None) -> None:
+    def __init__(
+        self, enclosing: BytecodeCompiler | None = None, function: Function | None = None, kind: str = SCRIPT
+    ) -> None:
         
         self.enclosing = enclosing
+        self.kind = kind
         # si estamos en main es una funcion mas con none
         self.function = function if function is not None else Function(None)
         self.chunk = self.function.chunk
         self.line = 1
         # simula el stack de la VM con cant de variables locales y su orden
         self.locals: list[Local] = []
-        self.locals.append(Local("", 0))
+        # El slot 0 lo ocupa el callee. En los metodos es la instancia, asi que lo
+        # nombramos `this` y leerlo es un OP_GET_LOCAL 0 como cualquier otra local.
+        self.locals.append(Local("this" if kind in (METHOD, INITIALIZER) else "", 0))
         # profundidad de bloque vemos si es local o global
         self.scope_depth = 0
         # lista de bucles abiertos para poder compilar break/continue
@@ -54,6 +66,8 @@ class BytecodeCompiler:
         self.name_consts: dict[str, int] = {}
         # lista de upvalues de la funcion
         self.upvalues: list[UpvalueRef] = []
+        # clases que se estan compilando (compartida con los compiladores de funciones anidadas)
+        self.classes: list[ClassInfo] = enclosing.classes if enclosing is not None else []
 
     
     def compile(self, statements: list[Stmt]) -> Chunk:
@@ -218,10 +232,10 @@ class BytecodeCompiler:
         return loop
 
     # compila en un chunk nuevo y al terminar se vuelve a este compilador
-    def compile_function(self, stmt: FunctionStmt) -> None:
+    def compile_function(self, stmt: FunctionStmt, kind: str = FUNCTION) -> None:
         function = Function(stmt.name.lexeme)
         function.arity = len(stmt.params)
-        sub = BytecodeCompiler(enclosing=self, function=function)
+        sub = BytecodeCompiler(enclosing=self, function=function, kind=kind)
         sub.line = stmt.name.line
         sub.begin_scope()
         for param in stmt.params:
@@ -229,8 +243,7 @@ class BytecodeCompiler:
             sub.locals[-1].depth = sub.scope_depth
         for inner in stmt.body:
             sub.gen_stmt(inner)
-        sub.emit(OpCode.OP_NIL)
-        sub.emit(OpCode.OP_RETURN)
+        sub.emit_implicit_return()
         function.upvalue_count = len(sub.upvalues)
 
         idx = self.chunk.add_const(function)
@@ -240,6 +253,14 @@ class BytecodeCompiler:
     
         for upvalue in sub.upvalues:
             self.emit(1 if upvalue.is_local else 0, upvalue.index)
+
+    # Un init siempre devuelve la instancia (slot 0); el resto de las funciones, nil.
+    def emit_implicit_return(self) -> None:
+        if self.kind == INITIALIZER:
+            self.emit(OpCode.OP_GET_LOCAL, 0)
+        else:
+            self.emit(OpCode.OP_NIL)
+        self.emit(OpCode.OP_RETURN)
 
     # statements deja el stack como estaba
     @singledispatchmethod
@@ -360,10 +381,58 @@ class BytecodeCompiler:
         if self.enclosing is None:
             raise CompileError(stmt.keyword.line, "No se puede retornar desde fuera de una funcion.")
         if stmt.value is None:
-            self.emit(OpCode.OP_NIL)
-        else:
-            self.gen_expr(stmt.value)
+            self.emit_implicit_return()
+            return
+        if self.kind == INITIALIZER:
+            raise CompileError(stmt.keyword.line, "No se puede retornar un valor desde un inicializador.")
+        self.gen_expr(stmt.value)
         self.emit(OpCode.OP_RETURN)
+
+    # Una clase se arma en runtime en tres pasos:
+    #   1. OP_CLASS crea la clase vacia y se guarda en su variable.
+    #   2. si hereda, OP_INHERIT copia los metodos de la superclase.
+    #   3. cada metodo se compila como un closure y OP_METHOD lo agrega a la clase.
+    @gen_stmt.register
+    def _(self, stmt: ClassStmt) -> None:
+        self.line = stmt.name.line
+        name_idx = self.name_const(stmt.name.lexeme)
+        is_local = self.scope_depth > 0
+        if is_local:
+            self.declare_local(stmt.name)
+            self.locals[-1].depth = self.scope_depth
+        self.emit(OpCode.OP_CLASS, name_idx)
+        if not is_local:
+            self.emit(OpCode.OP_DEFINE_GLOBAL, name_idx)
+
+        info = ClassInfo()
+        self.classes.append(info)
+
+        if stmt.superclass is not None:
+            if stmt.superclass.name.lexeme == stmt.name.lexeme:
+                raise CompileError(stmt.superclass.name.line, "Una clase no puede heredar de si misma.")
+            # La superclase queda en el stack como una local llamada `super` dentro
+            # de un scope propio: los metodos la capturan como upvalue y asi
+            # `super.metodo` sabe a que clase ir aunque la variable original cambie.
+            self.gen_expr(stmt.superclass)
+            self.begin_scope()
+            self.locals.append(Local("super", self.scope_depth))
+            self.emit_get(stmt.name)
+            self.line = stmt.superclass.name.line
+            self.emit(OpCode.OP_INHERIT)
+            info.has_superclass = True
+
+        # La clase queda en el tope mientras se le agregan los metodos.
+        self.emit_get(stmt.name)
+        for method in stmt.methods:
+            self.line = method.name.line
+            kind = INITIALIZER if method.name.lexeme == "init" else METHOD
+            self.compile_function(method, kind)
+            self.emit(OpCode.OP_METHOD, self.name_const(method.name.lexeme))
+        self.emit(OpCode.OP_POP)
+
+        if info.has_superclass:
+            self.end_scope()
+        self.classes.pop()
 
     # expresiones: dejan un valor en el stack (+1)
     @singledispatchmethod
@@ -459,3 +528,51 @@ class BytecodeCompiler:
         if len(expr.arguments) > 255:
             raise CompileError(self.line, "No se pueden tener mas de 255 argumentos.")
         self.emit(OpCode.OP_CALL, len(expr.arguments))
+
+    @gen_expr.register
+    def _(self, expr: GetExpr) -> None:
+        self.gen_expr(expr.object)
+        self.line = expr.name.line
+        self.emit(OpCode.OP_GET_PROPERTY, self.name_const(expr.name.lexeme))
+
+    # obj.campo = valor deja el valor en el stack (es una expresion, como la asignacion).
+    # Con operador compuesto (obj.campo += x) se duplica la instancia: una copia la
+    # consume el GET y la otra el SET, asi `obj` se evalua una sola vez.
+    @gen_expr.register
+    def _(self, expr: SetExpr) -> None:
+        self.gen_expr(expr.object)
+        name_idx = self.name_const(expr.name.lexeme)
+        if expr.operator is not None:
+            self.emit(OpCode.OP_DUP)
+            self.line = expr.name.line
+            self.emit(OpCode.OP_GET_PROPERTY, name_idx)
+            self.gen_expr(expr.value)
+            self.line = expr.operator.line
+            self.emit(*_BINARY_OPS[expr.operator.kind])
+        else:
+            self.gen_expr(expr.value)
+        self.line = expr.name.line
+        self.emit(OpCode.OP_SET_PROPERTY, name_idx)
+
+    # `this` es la local del slot 0 del metodo (o un upvalue si estamos en una
+    # funcion anidada dentro del metodo).
+    @gen_expr.register
+    def _(self, expr: ThisExpr) -> None:
+        self.line = expr.keyword.line
+        if not self.classes:
+            raise CompileError(expr.keyword.line, "No se puede usar 'this' fuera de una clase.")
+        self.emit_get(expr.keyword)
+
+    # super.metodo: se pushea la instancia y la superclase, y OP_GET_SUPER busca
+    # el metodo en la superclase y lo liga a la instancia.
+    @gen_expr.register
+    def _(self, expr: SuperExpr) -> None:
+        self.line = expr.keyword.line
+        if not self.classes:
+            raise CompileError(expr.keyword.line, "No se puede usar 'super' fuera de una clase.")
+        if not self.classes[-1].has_superclass:
+            raise CompileError(expr.keyword.line, "No se puede usar 'super' en una clase sin superclase.")
+        self.emit_get(Token(TokenKind.THIS, "this", None, expr.keyword.line))
+        self.emit_get(expr.keyword)
+        self.line = expr.method.line
+        self.emit(OpCode.OP_GET_SUPER, self.name_const(expr.method.lexeme))

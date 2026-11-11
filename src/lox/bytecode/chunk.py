@@ -10,6 +10,12 @@ WITH_CONST_OPERAND = {
     OpCode.OP_DEFINE_GLOBAL,
     OpCode.OP_GET_GLOBAL,
     OpCode.OP_SET_GLOBAL,
+    # en clases guardamos indice al nombre de la clase, metodo o propiedad
+    OpCode.OP_CLASS,
+    OpCode.OP_METHOD,
+    OpCode.OP_GET_PROPERTY,
+    OpCode.OP_SET_PROPERTY,
+    OpCode.OP_GET_SUPER,
 }
 
 # posiciones en el stack del valor de las variables locales

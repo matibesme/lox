@@ -3,6 +3,7 @@ from typing import Any
 from .chunk import Chunk, OpCode
 from lox.frontend.errors import VMError
 from .functions import CallFrame, Closure, Function, Upvalue
+from .classes import BoundMethod, Class, Instance
 
 # Limitacion de implementacion
 FRAMES_MAX = 10_000
@@ -221,7 +222,18 @@ class VM:
                     argc = code[ip]
                     ip += 1
                     callee = stack[-1 - argc]
-                    if not isinstance(callee, Closure):
+                    if isinstance(callee, BoundMethod):
+                        stack[-1 - argc] = callee.receiver
+                        callee = callee.method
+                    elif isinstance(callee, Class):
+                        stack[-1 - argc] = Instance(callee)
+                        initializer = callee.methods.get("init")
+                        if initializer is None:
+                            if argc != 0:
+                                raise fail(f"Se esperaban 0 argumentos pero se recibieron {argc}.")
+                            continue
+                        callee = initializer
+                    elif not isinstance(callee, Closure):
                         raise fail("Solo se pueden invocar funciones y clases.")
                     if argc != callee.function.arity:
                         raise fail(f"Se esperaban {callee.function.arity} argumentos pero se recibieron {argc}.")
@@ -250,6 +262,60 @@ class VM:
                 case OpCode.OP_CLOSE_UPVALUE:
                     self.close_upvalues(len(stack) - 1)
                     stack.pop()
+
+                # ---- clases ----
+
+                case OpCode.OP_CLASS:
+                    stack.append(Class(consts[code[ip]]))
+                    ip += 1
+
+                case OpCode.OP_INHERIT:
+                    superclass = stack[-2]
+                    if not isinstance(superclass, Class):
+                        raise fail("La superclase debe ser una clase.")
+                    stack.pop().methods.update(superclass.methods)
+
+                # [clase, closure]: los metodos propios pisan a los heredados.
+                case OpCode.OP_METHOD:
+                    name = consts[code[ip]]
+                    ip += 1
+                    method = stack.pop()
+                    stack[-1].methods[name] = method
+
+                case OpCode.OP_GET_PROPERTY:
+                    name = consts[code[ip]]
+                    ip += 1
+                    instance = stack[-1]
+                    if not isinstance(instance, Instance):
+                        raise fail("Solo las instancias tienen propiedades.")
+                    if name in instance.fields:
+                        stack[-1] = instance.fields[name]
+                    elif name in instance.klass.methods:
+                        stack[-1] = BoundMethod(instance, instance.klass.methods[name])
+                    else:
+                        raise fail(f"Propiedad no definida '{name}'.")
+
+                case OpCode.OP_SET_PROPERTY:
+                    name = consts[code[ip]]
+                    ip += 1
+                    value = stack.pop()
+                    instance = stack[-1]
+                    if not isinstance(instance, Instance):
+                        raise fail("Solo las instancias tienen campos.")
+                    instance.fields[name] = value
+                    stack[-1] = value
+
+                case OpCode.OP_GET_SUPER:
+                    name = consts[code[ip]]
+                    ip += 1
+                    superclass = stack.pop()
+                    method = superclass.methods.get(name)
+                    if method is None:
+                        raise fail(f"Propiedad no definida '{name}'.")
+                    stack[-1] = BoundMethod(stack[-1], method)
+
+                case OpCode.OP_DUP:
+                    stack.append(stack[-1])
 
                 case OpCode.OP_RETURN:
                     result = stack.pop()

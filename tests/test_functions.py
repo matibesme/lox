@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import unittest
 
-from lox_helpers import run
+from lox_helpers import for_each_backend, run
 
 
+@for_each_backend
 class TestFuncionesBasicas(unittest.TestCase):
     def test_funcion_sin_return_devuelve_nil(self):
         self.assertEqual(run("fun f() {} print f();").lines, ["nil"])
@@ -39,6 +40,7 @@ class TestFuncionesBasicas(unittest.TestCase):
         self.assertEqual(run(source).lines, ["120"])
 
 
+@for_each_backend
 class TestClosures(unittest.TestCase):
     def test_closure_captura_variable_por_referencia(self):
         source = """
@@ -74,6 +76,7 @@ class TestClosures(unittest.TestCase):
         self.assertEqual(run(source).lines, ["3", "1"])
 
 
+@for_each_backend
 class TestErroresDeLlamadas(unittest.TestCase):
     def test_llamar_algo_que_no_es_invocable_es_error(self):
         resultado = run('var x = 1; x();')

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import unittest
 
-from lox_helpers import run
+from lox_helpers import for_each_backend, run
 
 
+@for_each_backend
 class TestAritmetica(unittest.TestCase):
     def test_precedencia_de_operadores(self):
         self.assertEqual(run("print 1 + 2 * 3;").lines, ["7"])
@@ -43,6 +44,7 @@ class TestAritmetica(unittest.TestCase):
         self.assertTrue(resultado.reporter.had_runtime_error)
 
 
+@for_each_backend
 class TestComparacionesYVerdad(unittest.TestCase):
     def test_comparaciones_numericas(self):
         self.assertEqual(run("print 1 < 2; print 2 <= 2; print 3 > 2; print 2 >= 3;").lines,
@@ -64,6 +66,7 @@ class TestComparacionesYVerdad(unittest.TestCase):
         )
 
 
+@for_each_backend
 class TestEstadoYScopes(unittest.TestCase):
     def test_declarar_y_leer_variable(self):
         self.assertEqual(run("var x = 5; print x;").lines, ["5"])
@@ -87,6 +90,7 @@ class TestEstadoYScopes(unittest.TestCase):
         self.assertEqual(run(source).lines, ["2"])
 
 
+@for_each_backend
 class TestControlDeFlujo(unittest.TestCase):
     def test_while(self):
         source = "var i = 0; while (i < 3) { print i; i = i + 1; }"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from lox_helpers import parse, parse_expression, run
+from lox_helpers import for_each_backend, parse, parse_expression, run
 from lox.frontend.errors import ErrorReporter
 from lox.frontend.expr import CallExpr, GetExpr, SetExpr, SuperExpr, ThisExpr, VariableExpr
 from lox.frontend.statement import ClassStmt, FunctionStmt
@@ -49,6 +49,7 @@ class TestParserClases(unittest.TestCase):
         self.assertTrue(reporter.had_error)
 
 
+@for_each_backend
 class TestClasesEInstancias(unittest.TestCase):
     def test_imprimir_clase_e_instancia(self):
         source = """
@@ -161,6 +162,7 @@ class TestClasesEInstancias(unittest.TestCase):
         self.assertEqual(run(source).lines, ["local"])
 
 
+@for_each_backend
 class TestInicializadores(unittest.TestCase):
     def test_init_recibe_argumentos(self):
         source = """
@@ -205,6 +207,7 @@ class TestInicializadores(unittest.TestCase):
         self.assertEqual(run(source).lines, ["true", "Foo instance"])
 
 
+@for_each_backend
 class TestHerencia(unittest.TestCase):
     def test_subclase_hereda_metodos(self):
         source = """
@@ -302,6 +305,7 @@ class TestHerencia(unittest.TestCase):
         self.assertEqual(run(source).lines, ["bee"])
 
 
+@for_each_backend
 class TestErroresDeClases(unittest.TestCase):
     def _runtime_error(self, source: str, mensaje: str) -> None:
         resultado = run(source)

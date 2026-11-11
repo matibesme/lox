@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 
 
-import readline  
+import readline
 
 
 from lox.frontend import ErrorReporter, LoxError, Parser, Scanner

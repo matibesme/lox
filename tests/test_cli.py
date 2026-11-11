@@ -62,8 +62,8 @@ class TestSinBandera(unittest.TestCase):
         self.assertEqual(salida.strip(), "hola")
 
     def test_ejecucion_por_defecto_usa_compilador(self):
-        # El compilador aun no soporta clases, por lo que debe reportar error de compilacion
-        salida = run_stage('class Foo {}', None)
+        # Los errores estaticos los detecta el compilador a bytecode (no el Resolver)
+        salida = run_stage("return 1;", None)
         self.assertIn("Error de compilacion", salida)
 
 
@@ -73,9 +73,10 @@ class TestBanderaInterpreter(unittest.TestCase):
         self.assertEqual(salida.strip(), "hola")
 
     def test_no_pasa_por_compilacion(self):
-        # Las clases si estan soportadas en el interprete clasico
-        salida = run_stage('class Foo {} print "clase ok";', "interpreter")
-        self.assertEqual(salida.strip(), "clase ok")
+        # El mismo error estatico lo reporta el Resolver del tree-walk
+        salida = run_stage("return 1;", "interpreter")
+        self.assertIn("Error de resolucion", salida)
+        self.assertNotIn("Error de compilacion", salida)
 
 
 class TestParseoDeArgumentos(unittest.TestCase):

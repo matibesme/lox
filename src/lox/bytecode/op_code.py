@@ -49,6 +49,15 @@ class OpCode(IntEnum):
     OP_SET_UPVALUE = auto()    
     OP_CLOSE_UPVALUE = auto()  
 
+    # clases: el operando de los que lo tienen es el indice en el pool del nombre
+    OP_CLASS = auto()          # efecto +1, pushea una clase nueva sin metodos
+    OP_METHOD = auto()         # efecto -1, saca el closure del tope y lo guarda como metodo de la clase de abajo
+    OP_INHERIT = auto()        # efecto -1, [superclase, subclase] -> copia los metodos y saca la subclase
+    OP_GET_PROPERTY = auto()   # efecto 0, reemplaza la instancia por el campo o el metodo ligado
+    OP_SET_PROPERTY = auto()   # efecto -1, [instancia, valor] -> [valor]
+    OP_GET_SUPER = auto()      # efecto -1, [this, superclase] -> [metodo de la superclase ligado a this]
+
+    OP_DUP = auto()     # duplica el tope (efecto +1). Lo usa `obj.campo += x` para no evaluar obj dos veces
     OP_PRINT = auto()   # saca el tope y lo muestra (efecto -1)
     OP_POP = auto()     # descarta el tope: es el ';' de un expression statement
     OP_RETURN = auto()  # fin del programa
