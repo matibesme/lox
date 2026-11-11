@@ -131,7 +131,8 @@ class VM:
                 # las comparaciones dejan un booleano en el stack. 
                 case OpCode.OP_EQUAL:
                     b, a = stack.pop(), stack.pop()
-                    stack.append(a == b)
+                    # En Python True == 1.0, pero en Lox valores de distinto tipo nunca son iguales.
+                    stack.append(type(a) is type(b) and a == b)
                 case OpCode.OP_GREATER:
                     b, a = stack.pop(), stack.pop()
                     numbers(a, b)

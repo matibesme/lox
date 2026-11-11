@@ -53,6 +53,10 @@ class TestComparacionesYVerdad(unittest.TestCase):
     def test_igualdad_entre_tipos_distintos_es_false(self):
         self.assertEqual(run('print 1 == "1"; print nil == false;').lines, ["false", "false"])
 
+    def test_booleanos_y_numeros_no_son_iguales(self):
+        source = "print 1 == true; print 0 == false; print 1 != true; print true == true; print 1 == 1;"
+        self.assertEqual(run(source).lines, ["false", "false", "true", "true", "true"])
+
     def test_nil_y_false_son_falsy_el_resto_truthy(self):
         source = """
         if (nil) print "malo"; else print "nil falsy";

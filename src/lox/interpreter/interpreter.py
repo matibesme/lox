@@ -330,7 +330,8 @@ class Interpreter:
         return self.evaluate(expr.right)
 
     def _is_equal(self, left: Any, right: Any) -> bool:
-        return left == right
+        # En Python True == 1.0, pero en Lox valores de distinto tipo nunca son iguales.
+        return type(left) is type(right) and left == right
 
     def _is_truthy(self, value: Any) -> bool:
         if value is None:
