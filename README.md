@@ -37,6 +37,7 @@ Implementación de Lox en Python con dos formas de ejecución. Un intérprete *t
   - [En el intérprete puro](#en-el-intérprete-puro)
   - [En el compilador y la VM](#en-el-compilador-y-la-vm)
 - [Funcionalidades extra](#funcionalidades-extra)
+- [Ejercicios de LeetCode](#ejercicios-de-leetcode)
 
 ---
 
@@ -567,3 +568,11 @@ while self._is_truthy(self.evaluate(stmt.condition)):
 ```
 
 En `examples/clases.lox` hay un programa que usa clases, herencia, `super`, `+=`, `break` y `continue`.
+
+## Ejercicios de LeetCode
+
+Para probar la implementación con problemas reales resolvimos dos ejercicios de LeetCode en Lox, se pueden encontrar en `leetcode/`.
+```bash
+lox leetcode/9-palindrome-number.lox
+lox leetcode/206-reverse-linked-list.lox
+```

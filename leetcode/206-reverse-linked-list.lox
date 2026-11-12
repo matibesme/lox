@@ -1,0 +1,43 @@
+// LeetCode 206. Reverse Linked List
+// Dada la cabeza de una lista simplemente enlazada, invertirla y devolver la nueva cabeza.
+
+class Node {
+  init(val, next) {
+    this.val = val;
+    this.next = next;
+  }
+}
+
+fun reverseList(head) {
+  var prev = nil;
+  var current = head;
+
+  while (current != nil) {
+    var next = current.next;  // guarda el siguiente antes de pisarlo
+    current.next = prev;      // da vuelta el enlace
+    prev = current;
+    current = next;
+  }
+
+  return prev;
+}
+
+fun printList(head) {
+  var current = head;
+  while (current != nil) {
+    print current.val;
+    current = current.next;
+  }
+}
+
+// arma la lista 1 -> 2 -> 3 -> 4 -> 5
+var head = nil;
+for (var i = 5; i >= 1; i -= 1) {
+  head = Node(i, head);
+}
+
+print "original";
+printList(head);
+
+print "invertida";
+printList(reverseList(head));
