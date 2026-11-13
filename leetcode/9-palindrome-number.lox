@@ -1,0 +1,23 @@
+// LeetCode 9. Palindrome Number
+// Dado un entero x, devolver true si es capicúa (se lee igual al derecho y al revés).
+
+fun isPalindrome(x) {
+  if (x < 0) return false;
+
+  var original = x;
+  var reversed = 0;
+
+  while (x > 0) {
+    reversed = reversed * 10 + x % 10;  // agrega el último dígito de x a reversed
+    x -= x % 10;                        // le saca ese dígito a x
+    x /= 10;
+  }
+
+  return original == reversed;
+}
+
+print isPalindrome(121);    // true
+print isPalindrome(-121);   // false
+print isPalindrome(10);     // false
+print isPalindrome(12321);  // true
+print isPalindrome(0);      // true
