@@ -67,7 +67,7 @@ uv run lox ruta/al/archivo.lox
 ```bash
 lox --scanning script.lox  # Muestra la lista de tokens del scanner
 lox --parsing script.lox   # Muestra la salida del parser
-lox --interpreter script.lox # Muestra la salida del intérprete
+lox --interpreter script.lox # Ejecuta con el intérprete tree-walk en vez de la VM
 lox --disassemble script.lox # Muestra el disassembly del código bytecode
 ```
 
@@ -127,6 +127,7 @@ En C (clox), el `switch` sobre el opcode compila a una tabla de saltos: cuesta l
 | fib           |         2.07 |       **0.55** |
 | loop          |         3.10 |       **0.69** |
 | string_concat |         0.93 |       **0.27** |
+
 
 
 Es un caso concreto donde el lenguaje de implementación nos obligó a decidir algo distinto que en clase: la forma "natural" de escribir el loop del dispatch, que en C es gratis, en Python era el principal cuello de botella.
@@ -234,7 +235,7 @@ Análisis semántico: recorre el AST una sola vez antes de ejecutar para fijar e
   ```
   Esto garantiza que los closures siempre recuerden la variable correcta aunque después cambie el entorno.
 - **Declarar vs. Definir (`var a = a;`):** Evita que una variable se use para calcular su propio valor inicial. Al procesar un `var a = ...;`, `_declare` la guarda en el scope con `False` (existe pero aún no tiene valor). Luego analiza la expresión de la derecha: si ahí adentro se intenta leer `a`, el resolver ve ese `False` y lanza error antes de ejecutar. Recién cuando la expresión termina de evaluarse, `_define` pasa la variable a `True` para que quede disponible para el resto del código.
-- **Identidad de nodos (`itertools.count`):** Le asignamos a cada `Expr` un ID numérico único incremental con `itertools.count()`. Esto hace que el garbage collector no reutilice las direcciones de memoria de nodos ya liberados.
+- **Identidad de nodos (`itertools.count`):** Le asignamos a cada `Expr` un ID numérico único incremental con `itertools.count()`. No usamos `id()` porque Python puede reutilizar la dirección de memoria de un nodo ya liberado, y dos nodos distintos terminarían con el mismo identificador. El contador nunca repite un valor.
 - **Validaciones semánticas:** Reporta errores antes de ejecutar el código, como hacer un `return` fuera de una función o redeclarar una variable dentro del mismo bloque.
 
 ### Interpreter
@@ -255,8 +256,6 @@ Compilar nos acerca al código máquina. En lugar de recorrer un AST, donde cada
 El bytecode no es código máquina. No nos ata a ninguna arquitectura de hardware, así que sigue siendo portable (corre en cualquier lugar donde exista nuestra VM). En ese sentido es el punto medio entre el AST, muy portable y comprensible pero poco eficiente, y el código máquina que es muy rápido pero atado a una arquitectura.
 
 A cambio de la performance perdemos legibilidad, igualmente sigue siendo entendible, porque el bytecode está pensado para poder entenderlo (`lox --disassemble`). Queda entonces el trade-off de más performance y menos comprensión.
-
-Además queda la puerta abierta a futuras optimizaciones sobre representaciones intermedias que mejoren aún más la performance de nuestra implentacion de lox. 
 
 ## Diferencia importante
 
@@ -327,10 +326,10 @@ while True:
     op = code[ip]
     ip += 1
     match op:
-        case OpCode.OP_CONSTANT:
+        case Op.OP_CONSTANT:
             stack.append(consts[code[ip]])   # busca la constante en el pool y la apila
             ip += 1
-        case OpCode.OP_ADD:
+        case Op.OP_ADD:
             b, a = stack.pop(), stack.pop()  # el tope es el operando derecho
             ...                              # verifica los tipos
             stack.append(a + b)
@@ -446,7 +445,7 @@ class CallFrame:
 La VM crea el frame en `OP_CALL` y cambia el chunk que está ejecutando. Antes de entrar guarda el `ip` de quien llama, así `OP_RETURN` puede retomar justo donde había quedado.
 
 ```python
-case OpCode.OP_CALL:
+case Op.OP_CALL:
     argc = code[ip]
     ip += 1
     callee = stack[-1 - argc]                      # el closure está debajo de sus argumentos
@@ -459,7 +458,7 @@ case OpCode.OP_CALL:
     base = frame.base
     ip = 0
 
-case OpCode.OP_GET_LOCAL:
+case Op.OP_GET_LOCAL:
     stack.append(stack[base + code[ip]])           # el slot es relativo a la base del frame
     ip += 1
 ```
@@ -476,7 +475,7 @@ Los upvalues están implementados con `OP_GET_UPVALUE`, `OP_SET_UPVALUE` y `OP_C
  
 ### Saltos de flujo
  
-En el intérprete puro resolviamos el `if` y el `while` con un `if` y un `while` de Python. Ahora el flujo es una secuencia de bytes recorrida por el `ip`, así que controlar el flujo es **mover el `ip`**.
+En el intérprete puro resolvíamos el `if` y el `while` con un `if` y un `while` de Python. Ahora el flujo es una secuencia de bytes recorrida por el `ip`, así que controlar el flujo es **mover el `ip`**.
  
 | Instrucción | Operando | Qué hace |
 | :--- | :--- | :--- |
@@ -577,7 +576,7 @@ Agregamos algunas funcionalidades que funcionan igual en los dos backends.
 - **Módulo (`%`).** Operador binario, convierte los operandos a entero y devuelve un número. 
 
 ```python
-case OpCode.OP_MODULO:
+case Op.OP_MODULO:
     b, a = stack.pop(), stack.pop()
     numbers(a, b)
     if b == 0:
