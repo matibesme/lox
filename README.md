@@ -107,7 +107,7 @@ La VM gana porque saca del camino crítico todo lo que el tree-walk hace en cada
 
 La ganancia es mayor en `loop` y `fib`, que son casi puro despacho de operaciones chicas. Es menor en `string_concat`, porque parte del tiempo se va en copiar strings (y eso cuesta lo mismo en los dos backends), y en `classes`, porque crear instancias y `BoundMethod` sigue siendo crear objetos de Python.
 
-### Optimización del despacho
+### Optimización del dispatch
 
 La primera versión de la VM era sólo **~1.4x** más rápida que el tree-walk. Revisándola, encontramos que la mayor parte del tiempo no se iba en *ejecutar* las instrucciones sino en *elegir* cuál ejecutar.
 
@@ -128,9 +128,8 @@ En C (clox), el `switch` sobre el opcode compila a una tabla de saltos: cuesta l
 | loop          |         3.10 |       **0.69** |
 | string_concat |         0.93 |       **0.27** |
 
-*\* Mínimo de 3 corridas, misma máquina.*
 
-Es un caso concreto donde el lenguaje de implementación nos obligó a decidir algo distinto que en clase: la forma "natural" de escribir el loop de despacho, que en C es gratis, en Python era el principal cuello de botella.
+Es un caso concreto donde el lenguaje de implementación nos obligó a decidir algo distinto que en clase: la forma "natural" de escribir el loop del dispatch, que en C es gratis, en Python era el principal cuello de botella.
 
 
 
