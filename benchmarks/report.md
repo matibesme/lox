@@ -1,60 +1,67 @@
-# Reporte: Lox vs Python vs JavaScript
+# Reporte de benchmarks
 
-Resultado de las pruebas de rendimiento, presentadas con un grafico y una tabla por benchmark, con el tiempo de proceso completo en segundos: minimo, promedio y maximo de varias corridas.
+Tiempo de proceso completo (incluye el arranque del runtime) en segundos: minimo, promedio y maximo de 5 corridas por combinacion.
+
+## VM vs tree-walk
+
+![VM vs tree-walk](speedup.png)
+
+| Benchmark | Tree-walk (s) | VM (s) | VM mas rapida |
+|---|---:|---:|---:|
+| fib | 3.0663 | 0.5507 | 5.6x |
+| loop | 4.2935 | 0.6934 | 6.2x |
+| string_concat | 1.2774 | 0.2672 | 4.8x |
+| classes | 1.8899 | 0.4358 | 4.3x |
 
 ## Fib
 
-**Que se probo:** Recursion y llamadas a funcion: calcula `fib(24)` de forma recursiva, la misma logica en los tres lenguajes.
+**Que se probo:** Recursion y llamadas a funcion: calcula `fib(24)` de forma recursiva (sin memoizacion), la misma logica en todos los lenguajes.
 
 ![grafico fib](fib.png)
 
-| Lenguaje | MIN (s) | AVG (s) | MAX (s) |
+| Implementacion | Min (s) | AVG (s) | Max (s) |
 |---|---:|---:|---:|
-| lox | 2.9316 | 2.9813 | 3.0297 |
-| python | 0.0460 | 0.0499 | 0.0545 |
-| javascript | 0.0409 | 0.0441 | 0.0494 |
+| lox tree-walk | 3.0663 | 3.0829 | 3.0936 |
+| lox VM | 0.5507 | 0.5541 | 0.5607 |
+| python | 0.0514 | 0.0532 | 0.0568 |
+| javascript | 0.0462 | 0.0492 | 0.0523 |
 
-## Loop
+## loop
 
-**Que se probo:** Loop apretado: un `while` de 200.000 iteraciones que en cada vuelta evalua una condicion, hace una suma y un incremento.
+**Que se probo:** Loop apretado: un `while` de 200.000 iteraciones que en cada vuelta evalua una condicion, hace una suma y un incremento sobre variables globales.
 
 ![grafico loop](loop.png)
 
-| Lenguaje | MIN (s) | AVG (s) | MAX (s) |
+| Implementacion | Min (s) | AVG (s) | Max (s) |
 |---|---:|---:|---:|
-| lox | 4.1516 | 4.2111 | 4.3382 |
-| python | 0.0563 | 0.0584 | 0.0624 |
-| javascript | 0.0451 | 0.0469 | 0.0501 |
+| lox tree-walk | 4.2935 | 4.3461 | 4.4698 |
+| lox VM | 0.6934 | 0.7082 | 0.7205 |
+| python | 0.0598 | 0.0633 | 0.0663 |
+| javascript | 0.0495 | 0.0511 | 0.0526 |
 
-## Concatenación de strings
+## string_concat
 
-**Que se probo:** Creacion/descarte de strings: 50.000 concatenaciones sucesivas que arman una cadena de largo creciente.
+**Que se probo:** Creacion/descarte de strings: 50.000 concatenaciones sucesivas que arman una cadena de largo creciente (con variables locales).
 
 ![grafico string_concat](string_concat.png)
 
-| Lenguaje | MIN (s) | AVG (s) | MAX (s) |
+| Implementacion | Min (s) | AVG (s) | Max (s) |
 |---|---:|---:|---:|
-| lox | 1.2025 | 1.2242 | 1.2517 |
-| python | 0.0684 | 0.0725 | 0.0774 |
-| javascript | 0.0443 | 0.0487 | 0.0548 |
+| lox tree-walk | 1.2774 | 1.2855 | 1.2999 |
+| lox VM | 0.2672 | 0.2738 | 0.2786 |
+| python | 0.0708 | 0.0758 | 0.0806 |
+| javascript | 0.0481 | 0.0501 | 0.0525 |
 
-## Nuestra implementacion vs plox (Catedra)
+## classes
 
-`plox` es la implementación de referencia de la cátedra en su rama [`full-tree-walk`](https://github.com/FdelMazo/plox/tree/full-tree-walk). Ambas implementaciones están escritas en Python, por lo que esta comparación permite enfocarnos principalmente en las diferencias entre nuestras implementaciones del intérprete, sin que el lenguaje en el que están escritas sea una diferencia entre ellas.
+**Que se probo:** Clases: 30.000 llamadas a un metodo que lee campos de dos instancias y crea una instancia nueva (pasa por `init`).
 
-Las mediciones se realizaron con 5 repeticiones por benchmark, utilizando el mismo método que en la comparación anterior: se midió el tiempo total de ejecución de cada proceso y se ejecutó cada corrida mediante `subprocess`.
+![grafico classes](classes.png)
 
-| Benchmark     | Lox MIN (s) | Lox AVG (s) | plox MIN (s) | plox AVG (s) |
-| :------------ | ----------: | ----------: | -----------: | -----------: |
-| fib           |      2.9316 |      2.9813 |       3.1433 |       3.1931 |
-| loop          |      4.1516 |      4.2111 |       4.1343 |       4.1757 |
-| string_concat |      1.2025 |      1.2242 |       1.2451 |       1.2594 |
-
-### Conclusiones
-
-Los resultados muestran que ambas implementaciones tienen un rendimiento bastante similar. Lox resulta ligeramente más rápido en `fib` y `string_concat`, mientras que `plox` es ligeramente más rápido en `loop`. Las diferencias son relativamente pequeñas, por lo que no se observa una ventaja significativa de una implementación sobre la otra en estos benchmarks.
-
-Esto también sirve para poner en contexto la comparación anterior: la gran diferencia de rendimiento respecto de Python y JavaScript no se debe simplemente a que el código esté escrito en Python, ya que ambas implementaciones de Lox utilizan el mismo lenguaje. La diferencia está principalmente relacionada con la forma en que ejecutamos Lox.
-
-En particular, nuestro intérprete recorre el AST para ejecutar cada operación. Esto agrega un costo adicional que se vuelve más visible en benchmarks como `loop` y `fib`, donde se realizan muchas operaciones pequeñas y repetitivas.
+| Implementacion | Min (s) | AVG (s) | Max (s) |
+|---|---:|---:|---:|
+| lox tree-walk | 1.8899 | 1.9059 | 1.9312 |
+| lox VM | 0.4358 | 0.4404 | 0.4460 |
+| python | 0.0501 | 0.0534 | 0.0580 |
+| javascript | 0.0457 | 0.0486 | 0.0538 |
 

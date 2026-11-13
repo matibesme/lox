@@ -47,22 +47,55 @@ Corre tanto los tests de la cátedra como los nuestros.
 
 ---
 ## Benchmarks
-Comparamos el rendimiento de nuestra implementación de Lox contra Python y JavaScript en tres pruebas:
 
-| Benchmark                                    | Lox (s) | Python (s) | JavaScript (s) |
-| :------------------------------------------- | ------: | ---------: | -------------: |
-| **Fibonacci (recursivo, `fib(24)`)**         |   2.98s |      0.05s |          0.04s |
-| **Loop (bucle `while` de 200k iteraciones)** |   4.21s |      0.06s |          0.05s |
-| **Concatenación de strings (50k strings)**   |   1.22s |      0.07s |          0.05s |
+```bash
+python benchmarks/compare_languages.py [--repeats N] [--plox RUTA_A_PLOX]
+```
 
-En estos benchmarks, Lox resulta aproximadamente entre **17x y 70x más lento que Python**, dependiendo de la prueba.
+Corre cada benchmark con nuestros dos backends (tree-walk y VM de bytecode), con programas equivalentes en Python y JavaScript y, opcionalmente, con `plox` de la cátedra. Verifica que todos impriman lo mismo y genera el [Reporte de benchmarks](benchmarks/report.md) con tablas y gráficos.
 
-Esta diferencia es entendible ya que es un *tree-walk interpreter* puro. Además, nuestra implementación está escrita en Python, por lo que cada operación de Lox implica también el costo adicional de ejecutar la lógica del intérprete sobre el runtime de Python.
+### VM de bytecode vs tree-walk
 
-La diferencia es especialmente grande en Fibonacci y en el loop, donde se realizan una gran cantidad de operaciones pequeñas que implican recorridos del AST y *dispatch* del intérprete. En la concatenación de strings, parte del trabajo corresponde a operaciones internas de manejo de strings, por lo que la diferencia resulta menor.
+| Benchmark                                    | Tree-walk (s) | VM (s) | VM más rápida |
+| :------------------------------------------- | ------------: | -----: | ------------: |
+| **Fibonacci (recursivo, `fib(24)`)**         |          3.07 |   0.55 |      **5.6x** |
+| **Loop (bucle `while` de 200k iteraciones)** |          4.29 |   0.69 |      **6.2x** |
+| **Concatenación de strings (50k strings)**   |          1.28 |   0.27 |      **4.8x** |
+| **Clases (30k llamadas a métodos)**          |          1.89 |   0.44 |      **4.3x** |
 
 
-Para tablas y gráficos de cada prueba, ver el [Reporte de benchmarks](benchmarks/report.md).
+La VM gana porque saca del camino crítico todo lo que el tree-walk hace en cada nodo, en cada vuelta:
+- **Sin recorrer el AST:** el programa ya es una tira lineal de bytes y la VM sólo avanza un `ip`. El tree-walk, en cambio, hace un `singledispatchmethod` (que despacha por tipo) por cada nodo de cada expresión.
+- **Variables por índice:** el compilador resuelve cada local a un slot del stack, y leerla es `stack[base + slot]`. El tree-walk crea un `Environment` por bloque y por llamada, y busca por nombre en diccionarios encadenados.
+- **Sin excepciones para el control de flujo:** `return`, `break` y `continue` son saltos. En el tree-walk se propagan con excepciones (`ReturnSignal`, etc.), que en Python son caras.
+
+La ganancia es mayor en `loop` y `fib`, que son casi puro despacho de operaciones chicas. Es menor en `string_concat`, porque parte del tiempo se va en copiar strings (y eso cuesta lo mismo en los dos backends), y en `classes`, porque crear instancias y `BoundMethod` sigue siendo crear objetos de Python.
+
+### Optimización del despacho
+
+La primera versión de la VM era sólo **~1.4x** más rápida que el tree-walk. Revisándola, encontramos que la mayor parte del tiempo no se iba en *ejecutar* las instrucciones sino en *elegir* cuál ejecutar.
+
+En C (clox), el `switch` sobre el opcode compila a una tabla de saltos: cuesta lo mismo sea cual sea el opcode. El `match` de Python, en cambio, **prueba los `case` de a uno, en orden**. Y con `case OpCode.OP_X:` cada prueba además resuelve el miembro del `IntEnum`, que es caro. Medido en aislamiento:
+
+| Cómo se escribe el `case` | opcode en la posición 0 | posición 15 | posición 35 |
+| :------------------------ | ----------------------: | ----------: | ----------: |
+| `case OpCode.OP_X:` (IntEnum) |                  106 ns |      923 ns |     2041 ns |
+| `case Op.OP_X:` (clase común con `int`) |         70 ns |      288 ns |      562 ns |
+
+`OP_POP` estaba en la posición 35 y es el ~15% de las instrucciones ejecutadas, así que sólo despacharlo costaba ~2 µs, mucho más que el `stack.pop()` que hace. Hicimos dos cambios, sin tocar la semántica de ningún opcode:
+1. El compilador y el desensamblador siguen usando el `IntEnum`, pero el loop de la VM compara contra `Op`, una clase común con los mismos valores como `int` planos.
+2. Contamos cuántas veces se ejecuta cada opcode en los benchmarks y en los tests de la cátedra, y ordenamos los `case` por frecuencia: `OP_CONSTANT`, `OP_GET_LOCAL`, `OP_POP`, `OP_JUMP_IF_FALSE`, `OP_GET_GLOBAL` y `OP_ADD` van primero y suman ~2/3 de lo ejecutado.
+
+| Benchmark     | VM antes (s)* | VM después (s) |
+| :------------ | -----------: | -------------: |
+| fib           |         2.07 |       **0.55** |
+| loop          |         3.10 |       **0.69** |
+| string_concat |         0.93 |       **0.27** |
+
+*\* Mínimo de 3 corridas, misma máquina.*
+
+Es un caso concreto donde el lenguaje de implementación nos obligó a decidir algo distinto que en clase: la forma "natural" de escribir el loop de despacho, que en C es gratis, en Python era el principal cuello de botella.
+
 
 
 ## Implementación y decisiones de diseño
@@ -172,4 +205,5 @@ Encargado del runtime y la ejecución: recorre el AST evaluando expresiones y ej
 - **Retornos con señales:** Para propagar un return a través de loops y bloques anidados, lanzamos una excepción `ReturnSignal(value)`, capturada por `LoxFunction.call()`.
 - **Persistencia en el REPL:** En `_run_prompt()`, el `Interpreter` se instancia una sola vez fuera del loop principal, permitiendo que las variables y funciones declaradas en una línea persistan para las siguientes.
 - **Códigos de salida:** El `ErrorReporter` maneja los códigos de retorno `65` para errores estáticos (léxicos, sintácticos o del resolver), `70` para errores en runtime (`LoxRuntimeError`) y `64` para argumentos inválidos de CLI.
+
 

@@ -1,0 +1,20 @@
+// Clases: mide el costo de crear instancias, leer campos y llamar metodos.
+class Vector {
+    init(x, y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    sumar(otro) {
+        return Vector(this.x + otro.x, this.y + otro.y);
+    }
+}
+
+var acc = Vector(0, 0);
+var paso = Vector(1, 2);
+var i = 0;
+while (i < 30000) {
+    acc = acc.sumar(paso);
+    i = i + 1;
+}
+print acc.x + acc.y;
