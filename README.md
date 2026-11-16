@@ -105,7 +105,7 @@ La VM gana porque saca del camino crítico todo lo que el tree-walk hace en cada
 - **Variables por índice:** el compilador resuelve cada local a un slot del stack, y leerla es `stack[base + slot]`. El tree-walk crea un `Environment` por bloque y por llamada, y busca por nombre en diccionarios encadenados.
 - **Sin excepciones para el control de flujo:** `return`, `break` y `continue` son saltos. En el tree-walk se propagan con excepciones (`ReturnSignal`, etc.), que en Python son caras.
 
-La ganancia es mayor en `loop` y `fib`, que son casi puro despacho de operaciones chicas. Es menor en `string_concat`, porque parte del tiempo se va en copiar strings (y eso cuesta lo mismo en los dos backends), y en `classes`, porque crear instancias y `BoundMethod` sigue siendo crear objetos de Python.
+La ganancia es mayor en `loop` y `fib`, que son casi puro dispatch de operaciones chicas. Es menor en `string_concat`, porque parte del tiempo se va en copiar strings (y eso cuesta lo mismo en los dos backends), y en `classes`, porque crear instancias y `BoundMethod` sigue siendo crear objetos de Python.
 
 ### Optimización del dispatch
 
@@ -118,7 +118,7 @@ En C (clox), el `switch` sobre el opcode compila a una tabla de saltos: cuesta l
 | `case OpCode.OP_X:` (IntEnum) |                  106 ns |      923 ns |     2041 ns |
 | `case Op.OP_X:` (clase común con `int`) |         70 ns |      288 ns |      562 ns |
 
-`OP_POP` estaba en la posición 35 y es el ~15% de las instrucciones ejecutadas, así que sólo despacharlo costaba ~2 µs, mucho más que el `stack.pop()` que hace. Hicimos dos cambios, sin tocar la semántica de ningún opcode:
+`OP_POP` estaba en la posición 35 y es el ~15% de las instrucciones ejecutadas, así que sólo el dispatch costaba ~2 µs, mucho más que el `stack.pop()` que hace. Hicimos dos cambios, sin tocar la semántica de ningún opcode:
 1. El compilador y el desensamblador siguen usando el `IntEnum`, pero el loop de la VM compara contra `Op`, una clase común con los mismos valores como `int` planos.
 2. Contamos cuántas veces se ejecuta cada opcode en los benchmarks y en los tests de la cátedra, y ordenamos los `case` por frecuencia: `OP_CONSTANT`, `OP_GET_LOCAL`, `OP_POP`, `OP_JUMP_IF_FALSE`, `OP_GET_GLOBAL` y `OP_ADD` van primero y suman ~2/3 de lo ejecutado.
 
@@ -130,8 +130,10 @@ En C (clox), el `switch` sobre el opcode compila a una tabla de saltos: cuesta l
 
 
 
-Es un caso concreto donde el lenguaje de implementación nos obligó a decidir algo distinto que en clase: la forma "natural" de escribir el loop del dispatch, que en C es gratis, en Python era el principal cuello de botella.
+Es un caso concreto donde el lenguaje de implementación nos obligó a decidir algo distinto que en clase. La forma “natural” de escribir el loop de la VM, un match con un case por opcode, en C es gratis porque se compila a una tabla de saltos, pero en Python era el principal cuello de botella.
 
+### Conclusion
+En todos los benchmarks la VM de bytecode es entre 4x y 6x más rápida que el tree-walk, así que pasar a compilación mejoró la performance. Como ambos corren sobre el mismo Python y solo cambia la técnica de ejecución, esa mejora es por la fase de compilación. Aun así, la primera versión de la VM mejoraba solo ~1.4x, y la mayor parte de la ganancia vino de corregir el dispatch, lo que muestra que el bytecode por sí solo no garantiza velocidad. Frente a Python y JavaScript seguimos entre 4x y 12x más lentos. Es esperable, porque se comparan implementaciones. Nuestra VM está escrita en Python, que a su vez está escrito en C, y cada capa agrega overhead. 
 
 
 ## Implementación y decisiones de diseño
